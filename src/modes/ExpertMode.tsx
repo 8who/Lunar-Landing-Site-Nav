@@ -5,6 +5,7 @@ import SkyView from '../components/SkyView'
 import MoonGlobe from '../components/MoonGlobe'
 import { buildTimeline } from '../lib/astro/timeline'
 import { rankSites, type RankSortKey, type RankedSite } from '../lib/astro/ranking'
+import { bestFixedPanel } from '../lib/astro/panel'
 import { createObserver } from '../lib/astro/observer'
 import { SITES, customSite } from '../lib/astro/sites'
 import type { LunarSite, SkySample } from '../lib/astro/types'
@@ -106,10 +107,19 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
   // Sky view follows the hovered sample, then the pinned one, then the shared instant.
   const skyTime = hover?.t ?? pinned?.t ?? t
   const sky = useMemo(() => createObserver(site).skyAt(skyTime), [site, skyTime])
-  const panelTilt =
+
+  // Ranking view has no single-site range analysis, so only score when needed.
+  const bestPanel = useMemo(
+    () => (view === 'single' ? bestFixedPanel(samples) : null),
+    [view, samples],
+  )
+
+  const panelNow =
     sky.sun.elevation > 0
-      ? `Panel tilt to face the Sun: ${(90 - sky.sun.elevation).toFixed(1)}° from horizontal`
-      : 'Panel tilt to face the Sun: Sun below horizon'
+      ? `Tilt ${(90 - sky.sun.elevation).toFixed(1)}° from horizontal · heading ${Math.round(
+          sky.sun.azimuth,
+        ) % 360}° ${compassPoint(sky.sun.azimuth)}`
+      : 'Sun below horizon'
 
   const applyCustom = () => {
     const lat = Number(customLat)
@@ -260,6 +270,39 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
             />
           </section>
 
+          <section className="chart-card panel-card">
+            <div className="chart-head">
+              <div>
+                <h2>Solar panel</h2>
+                <p>Fixed array · orientation for this site and range</p>
+              </div>
+            </div>
+
+            <div className="panel-grid">
+              <div className="panel-item">
+                <span className="panel-label">Face the Sun now</span>
+                <p className="panel-now">{panelNow}</p>
+              </div>
+
+              {bestPanel && (
+                <div className="panel-item panel-best">
+                  <span className="panel-label">Best fixed panel for this range</span>
+                  <strong className="panel-value">
+                    {bestPanel.tiltDeg}° tilt · {bestPanel.azimuthDeg}°{' '}
+                    {compassPoint(bestPanel.azimuthDeg)}
+                  </strong>
+                  <span className="panel-sub">
+                    captures {bestPanel.capturedPct.toFixed(1)}% of a Sun-tracking panel
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <p className="panel-note">
+              Flat-horizon model; Sun elevation measured at the disc centre.
+            </p>
+          </section>
+
           <section className="chart-card">
             <div className="chart-head">
               <div>
@@ -314,7 +357,6 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
                   the current site
                 </p>
               </div>
-              <p className="muted-line">{panelTilt}</p>
             </div>
             <MoonGlobe
               sites={SITES}
@@ -381,6 +423,15 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
 function countdown(target: number | undefined, from: number) {
   if (target === undefined) return '—'
   return formatDuration(Math.max(0, target - from))
+}
+
+/** Four-point compass letter for a heading in degrees. */
+function compassPoint(azimuthDeg: number): string {
+  const azimuth = ((azimuthDeg % 360) + 360) % 360
+  if (azimuth < 45 || azimuth >= 315) return 'N'
+  if (azimuth < 135) return 'E'
+  if (azimuth < 225) return 'S'
+  return 'W'
 }
 
 function Kpi({
