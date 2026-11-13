@@ -294,8 +294,15 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
                     {compassPoint(bestPanel.azimuthDeg)}
                   </strong>
                   <span className="panel-sub">
-                    captures {bestPanel.capturedPct.toFixed(1)}% of a Sun-tracking panel
+                    captures {bestPanel.capturedPct.toFixed(1)}% of a perfect two-axis Sun-tracking panel
                   </span>
+                  {isTerrainCritical(site) && (
+                    <p className="panel-note">
+                      At polar sites the Sun circles through every heading, so the heading shown is not
+                      meaningful; a vertical array that rotates, or panels on several faces, collects far
+                      more.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
