@@ -16,7 +16,7 @@ function todayUtc(): string {
 export default function App() {
   const [mode, setMode] = useState<Mode>('explorer')
   // Shared between both modes: switching views keeps the site and the instant.
-  const [site, setSite] = useState<LunarSite>(SITES.find((s) => s.id === 'shackleton')!)
+  const [site, setSite] = useState<LunarSite>(SITES.find((s) => s.id === 'apollo11')!)
   const [day, setDay] = useState(todayUtc)
   const [minutesOfDay, setMinutesOfDay] = useState(12 * 60)
 

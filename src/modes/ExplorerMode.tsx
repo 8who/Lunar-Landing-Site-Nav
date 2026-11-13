@@ -91,7 +91,7 @@ export default function ExplorerMode({
           <h3>Earth: {earthUp ? 'visible' : 'not visible'}</h3>
           <p>
             {earthUp
-              ? `Earth is ${earthDegrees} degrees above the horizon, so a direct radio link works.`
+              ? `Earth is ${earthDegrees} degrees above the horizon, so there is a clear line of sight (flat-terrain assumption).`
               : 'Earth is below the horizon, no direct line of sight.'}
           </p>
         </div>
