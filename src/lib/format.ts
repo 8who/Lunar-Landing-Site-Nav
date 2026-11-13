@@ -11,6 +11,21 @@ export function formatDuration(ms: number): string {
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const
+
 export function formatUtc(t: number, opts: { seconds?: boolean } = {}): string {
   const d = new Date(t)
   const base = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(
@@ -55,6 +70,20 @@ export function formatHours(ms: number): string {
 export function formatClockMinutes(minutes: number): string {
   const total = Math.max(0, Math.round(minutes))
   return `${pad(Math.floor(total / 60) % 24)}:${pad(total % 60)}`
+}
+
+/** "Nov 13" in UTC, for compact date ticks. */
+export function formatMonthDay(t: number): string {
+  const d = new Date(t)
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`
+}
+
+/** "Nov 13 2026 · 12:00 UTC". */
+export function formatInstant(t: number): string {
+  const d = new Date(t)
+  return `${formatMonthDay(t)} ${d.getUTCFullYear()} · ${pad(d.getUTCHours())}:${pad(
+    d.getUTCMinutes(),
+  )} UTC`
 }
 
 /** Selenographic coordinates in plain text: "0.67 N, 23.47 E". */
