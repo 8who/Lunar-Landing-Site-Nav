@@ -3,7 +3,7 @@ import MoonGlobe from '../components/MoonGlobe'
 import SkyView from '../components/SkyView'
 import { buildTimeline } from '../lib/astro/timeline'
 import { createObserver } from '../lib/astro/observer'
-import { SITES, customSite } from '../lib/astro/sites'
+import { SITES, customSite, isTerrainCritical } from '../lib/astro/sites'
 import {
   DAY_MS,
   SCRUB_DAYS,
@@ -189,7 +189,11 @@ export default function ExplorerMode({
     ))
 
   const earthUp = sky.earth.elevation > 0
-  const sunUp = sky.sun.elevation > 0
+  // A Sun whose centre sits just below the horizon can still be half visible
+  // at the poles, so "up" means the upper limb is above the horizon.
+  const sunUp = sky.sunlit
+  const sunPartial = sunUp && sky.sun.elevation < sky.sun.angularDiameterDeg / 2
+  const terrainCritical = isTerrainCritical(site)
   const earthDegrees = Math.round(Math.abs(sky.earth.elevation))
   const sunDegrees = Math.round(Math.abs(sky.sun.elevation))
 
@@ -237,11 +241,21 @@ export default function ExplorerMode({
             </div>
             <p>
               {sunUp
-                ? `The Sun is ${sunDegrees} degrees above the horizon, so solar panels get light.`
+                ? sunPartial
+                  ? 'The Sun is only partly above the horizon: panels get some light, and a vertical panel facing it gets the most.'
+                  : `The Sun is ${sunDegrees} degrees above the horizon, so solar panels get light.`
                 : 'The Sun is below the horizon, so it is night here.'}
             </p>
           </div>
         </article>
+
+        {terrainCritical && (
+          <p className="terrain-warning">
+            Polar site: here the Sun and Earth skim the horizon, so nearby hills and crater walls
+            decide what you really see. These numbers assume flat ground; ridges can be lit
+            most of the time and crater floors never.
+          </p>
+        )}
 
         <p className="daily-summary">
           Earth is visible {formatHours(daily.commMs)} of this day, the Sun{' '}

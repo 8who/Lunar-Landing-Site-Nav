@@ -47,6 +47,9 @@ comparison, export.
 | Moon body-fixed frame | IAU WGCCRE 2015 orientation (pole + W) **with periodic libration terms** |
 | Observer parallax | Site radius vector used explicitly; the Moon-centre direction is *not* enough — Earth's parallax from the surface reaches 0.26°, i.e. half of Earth's own disc |
 | Horizon | Local tangent plane, **no atmospheric refraction** (the Moon has no atmosphere) |
+| Sunlight | Upper limb of the 0.53° solar disc above the horizon; partial disc weighted by visible area |
+| Power | Visible-disc fraction × incidence × (1 AU / r)², for a **vertical Sun-tracking array** (cos e, polar-lander practice) and a flat panel (sin e). A flat panel at the pole gets ~1% of the solar constant; a vertical one ~50% |
+| Polar caveat | Sites at \|lat\| ≥ 80° are flagged: there the flat-horizon numbers are a first guess, terrain dominates |
 | Windows | Boolean scan + bisection refinement of every horizon crossing (~1 s) |
 
 Earth's direction from the Moon is simply `-r_moon` rotated into the body-fixed
