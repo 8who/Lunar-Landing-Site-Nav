@@ -392,7 +392,15 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
               </div>
               <p className="sky-hint">Drag to look around</p>
             </div>
-            <SkyView site={site} t={skyTime} />
+            <SkyView
+              site={site}
+              t={skyTime}
+              panel={
+                bestPanel && bestPanel.capturedPct > 0
+                  ? { tiltDeg: bestPanel.tiltDeg, azimuthDeg: bestPanel.azimuthDeg }
+                  : null
+              }
+            />
           </section>
         </>
       ) : (
