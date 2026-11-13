@@ -7,7 +7,7 @@ import { buildTimeline } from '../lib/astro/timeline'
 import { rankSites, type RankSortKey, type RankedSite } from '../lib/astro/ranking'
 import { bestFixedPanel } from '../lib/astro/panel'
 import { createObserver } from '../lib/astro/observer'
-import { SITES, customSite } from '../lib/astro/sites'
+import { SITES, customSite, isTerrainCritical } from '../lib/astro/sites'
 import type { LunarSite, SkySample } from '../lib/astro/types'
 import { formatDuration, formatUtc, deg } from '../lib/format'
 
@@ -251,9 +251,11 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
               tone="joint"
             />
             <Kpi
-              label="Max Sun height"
-              value={`${metrics.maxSunElevation.toFixed(1)}°`}
-              sub={`power proxy ${(metrics.meanSolarIncidence * 100).toFixed(1)}% of flat array`}
+              label="Solar power"
+              value={`${Math.round(metrics.meanTrackingFluxWm2)} W/m²`}
+              sub={`avg, vertical Sun-tracking array · flat panel ${Math.round(
+                metrics.meanSolarIncidence * 1361,
+              )} W/m² · Sun max ${metrics.maxSunElevation.toFixed(1)}°`}
               tone="sun"
             />
             <Kpi
@@ -312,6 +314,13 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
                   {site.approx ? ' (approx.)' : ''} — {formatUtc(t0)} → {formatUtc(t1)}
                 </p>
                 {site.note && <p className="site-note">{site.note}</p>}
+                {isTerrainCritical(site) && (
+                  <p className="terrain-warning">
+                    |lat| ≥ 80°: flat-horizon estimate. Local relief dominates here (crests can
+                    exceed 80% illumination, crater floors are permanently dark). Treat these
+                    numbers as a first guess until LOLA horizon masks are applied.
+                  </p>
+                )}
               </div>
               <div className="readout">
                 <div>
@@ -412,8 +421,10 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
         <div>
           <strong>Model.</strong> Sun &amp; Moon ephemerides via astronomy-engine (VSOP87/ELP-2000
           series), lunar body-fixed frame from IAU WGCCRE 2015 including physical libration.
-          Validated against JPL Horizons to &lt;0.02° in elevation. Flat local horizon: terrain
-          masking and LOLA topography are the next step.
+          Validated against JPL Horizons to &lt;0.02° in elevation. Sunlight counts from the upper
+          limb of the solar disc; power is the visible-disc fraction × incidence × (1 AU/r)², for a
+          vertical Sun-tracking array (polar-lander practice) and a flat panel. Flat local horizon:
+          terrain masking and LOLA topography are the next step.
         </div>
       </footer>
     </>

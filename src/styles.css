@@ -1614,3 +1614,14 @@ button {
     scroll-behavior: auto !important;
   }
 }
+
+/* Flat-horizon caveat for polar sites (|lat| >= 80 deg) */
+.terrain-warning {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-left: 3px solid var(--sun);
+  background: color-mix(in srgb, var(--sun) 10%, transparent);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}

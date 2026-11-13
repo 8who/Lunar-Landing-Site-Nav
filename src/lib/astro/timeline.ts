@@ -1,4 +1,4 @@
-import { createObserver, type SiteObserver } from './observer'
+import { KM_PER_AU, SOLAR_CONSTANT_WM2, createObserver, discFractionAbove, type SiteObserver } from './observer'
 import type { LunarSite, SkySample, TimelineMetrics, TimeWindow } from './types'
 
 const MIN = 60_000
@@ -134,7 +134,7 @@ export function buildTimeline(
   // costs the same number of ephemeris evaluations as drawing the curve.
   const step = samples.length > 1 ? samples[1].t - samples[0].t : stepMs
 
-  const sunOn = (t: number) => observer.sunElevation(t) > 0
+  const sunOn = (t: number) => observer.sunVisible(t)
   const earthOn = (t: number) => observer.earthElevation(t) > 0
   const bothOn = (t: number) => sunOn(t) && earthOn(t)
 
@@ -147,21 +147,35 @@ export function buildTimeline(
   let commMs = 0
   let jointMs = 0
   let elevationSum = 0
+  let litTimeForMean = 0
   let incidenceSum = 0
+  let trackingSum = 0
   let maxSunElevation = -90
 
+  const rad = Math.PI / 180
   for (let i = 1; i < samples.length; i++) {
     const dt = samples[i].t - samples[i - 1].t
     const a = samples[i - 1]
     const b = samples[i]
-    // Linear interpolation of the horizon crossing inside each step.
-    sunlitMs += dt * fractionAbove(a.sun.elevation, b.sun.elevation)
+    const rSun = (a.sun.angularDiameterDeg + b.sun.angularDiameterDeg) / 4
+    // Linear interpolation of the horizon crossing inside each step. The Sun
+    // counts as up while its upper limb is above the horizon.
+    sunlitMs += dt * fractionAbove(a.sun.elevation + rSun, b.sun.elevation + rSun)
     commMs += dt * fractionAbove(a.earth.elevation, b.earth.elevation)
     if (a.sunlit && b.sunlit && a.earthVisible && b.earthVisible) jointMs += dt
 
     const midElev = (a.sun.elevation + b.sun.elevation) / 2
-    elevationSum += midElev * dt
-    incidenceSum += Math.max(0, Math.sin(midElev * Math.PI / 180)) * dt
+    const visible = discFractionAbove(midElev, rSun)
+    const auRatio = KM_PER_AU / ((a.sun.distanceKm + b.sun.distanceKm) / 2)
+    const flux = visible * auRatio * auRatio
+    if (visible > 0) {
+      elevationSum += Math.max(0, midElev) * dt
+      litTimeForMean += dt
+    }
+    // Flat deck array: sees the Sun at elevation e with incidence sin(e).
+    incidenceSum += flux * Math.max(0, Math.sin(midElev * rad)) * dt
+    // Vertical array turned to the Sun's azimuth: incidence cos(e).
+    trackingSum += flux * Math.cos(Math.max(0, midElev) * rad) * dt
     if (b.sun.elevation > maxSunElevation) maxSunElevation = b.sun.elevation
   }
 
@@ -175,9 +189,11 @@ export function buildTimeline(
     jointPct: (jointMs / spanMs) * 100,
     longestSunlitMs: longest(sunWindows),
     longestCommMs: longest(commWindows),
-    meanSunElevation: elevationSum / spanMs,
+    meanSunElevation: litTimeForMean > 0 ? elevationSum / litTimeForMean : 0,
     maxSunElevation,
     meanSolarIncidence: incidenceSum / spanMs,
+    meanTrackingIncidence: trackingSum / spanMs,
+    meanTrackingFluxWm2: (trackingSum / spanMs) * SOLAR_CONSTANT_WM2,
     nextSunset: firstCrossing(sunOn, t0, t1, stepMs, false),
     nextSunrise: firstCrossing(sunOn, t0, t1, stepMs, true),
     nextEarthset: firstCrossing(earthOn, t0, t1, stepMs, false),
@@ -187,7 +203,7 @@ export function buildTimeline(
   return { samples, sunWindows, commWindows, jointWindows, metrics }
 }
 
-/** Fraction of [a,b] where the Sun is above the horizon, from the two elevations. */
+/** Fraction of [a,b] where a value is above 0, from its two end values (linear). */
 function fractionAbove(elevA: number, elevB: number): number {
   if (elevA > 0 && elevB > 0) return 1
   if (elevA <= 0 && elevB <= 0) return 0

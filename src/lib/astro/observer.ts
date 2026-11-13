@@ -71,12 +71,32 @@ export function subEarthPoint(date: Date | number): { lat: number; lon: number }
   return toSelenographic(toBody({ x: -m.x, y: -m.y, z: -m.z }, basis))
 }
 
+/**
+ * Fraction of a disc of angular radius `radiusDeg` that sits above a flat
+ * horizon when its centre is at `elevationDeg` (circular-segment area).
+ *
+ * The Sun is 0.53 deg across. At the poles it skims the horizon for days, so
+ * "centre above 0 deg" is the wrong test: half a Sun already powers a panel.
+ */
+export function discFractionAbove(elevationDeg: number, radiusDeg: number): number {
+  if (radiusDeg <= 0) return elevationDeg > 0 ? 1 : 0
+  const h = elevationDeg / radiusDeg
+  if (h >= 1) return 1
+  if (h <= -1) return 0
+  return (Math.acos(-h) + h * Math.sqrt(1 - h * h)) / Math.PI
+}
+
+/** Mean solar constant at 1 AU, W/m^2 (TSI). */
+export const SOLAR_CONSTANT_WM2 = 1361
+
 export interface SiteObserver {
   site: LunarSite
   /** Full Sun + Earth geometry at an instant */
   skyAt(date: Date | number): SkySample
-  /** Sun elevation only (cheap path for window searches) */
+  /** Sun centre elevation only (cheap path for window searches) */
   sunElevation(date: Date | number): number
+  /** Any part of the solar disc above the flat horizon */
+  sunVisible(date: Date | number): boolean
   /** Earth elevation only (cheap path for window searches) */
   earthElevation(date: Date | number): number
 }
@@ -109,6 +129,13 @@ export function createObserver(site: LunarSite): SiteObserver {
     return Math.asin(Math.max(-1, Math.min(1, dot(normalize(sunRel), frame.up)))) * DEG
   }
 
+  const sunVisible = (date: Date | number) => {
+    const { sunRel } = relativeVectors(date)
+    const d = Math.sqrt(dot(sunRel, sunRel))
+    const elev = Math.asin(Math.max(-1, Math.min(1, dot(normalize(sunRel), frame.up)))) * DEG
+    return elev > -Math.atan(SUN_RADIUS_KM / d) * DEG
+  }
+
   const earthElevation = (date: Date | number) => {
     const { earthRel } = relativeVectors(date)
     return Math.asin(Math.max(-1, Math.min(1, dot(normalize(earthRel), frame.up)))) * DEG
@@ -117,6 +144,7 @@ export function createObserver(site: LunarSite): SiteObserver {
   return {
     site,
     sunElevation,
+    sunVisible,
     earthElevation,
     skyAt(date) {
       const { sunRel, earthRel } = relativeVectors(date)
@@ -126,7 +154,8 @@ export function createObserver(site: LunarSite): SiteObserver {
         t: (date instanceof Date ? date : new Date(date)).getTime(),
         sun,
         earth,
-        sunlit: sun.elevation > 0,
+        // Upper limb above the horizon: a partly risen Sun still lights the site.
+        sunlit: sun.elevation > -sun.angularDiameterDeg / 2,
         earthVisible: earth.elevation > 0,
       }
     },
