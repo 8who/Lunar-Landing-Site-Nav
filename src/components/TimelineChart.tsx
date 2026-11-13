@@ -1,0 +1,261 @@
+import { useMemo, useRef, useState } from 'react'
+import type { SkySample, TimeWindow } from '../lib/astro/types'
+import { deg, formatDay, formatUtc } from '../lib/format'
+
+interface Props {
+  samples: SkySample[]
+  sunWindows: TimeWindow[]
+  commWindows: TimeWindow[]
+  onHover?: (sample: SkySample | null) => void
+}
+
+const W = 1000
+const H = 380
+const M = { top: 34, right: 18, bottom: 30, left: 46 }
+const INNER_W = W - M.left - M.right
+const INNER_H = H - M.top - M.bottom
+
+function yTicks(maxAbs: number): number[] {
+  const step = maxAbs <= 10 ? 2.5 : maxAbs <= 20 ? 5 : maxAbs <= 45 ? 10 : 30
+  const out: number[] = []
+  for (let v = -maxAbs; v <= maxAbs + 1e-9; v += step) out.push(Math.round(v * 10) / 10)
+  return out
+}
+
+export default function TimelineChart({ samples, sunWindows, commWindows, onHover }: Props) {
+  const svgRef = useRef<SVGSVGElement | null>(null)
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+
+  const t0 = samples[0]?.t ?? 0
+  const t1 = samples[samples.length - 1]?.t ?? 1
+  const span = Math.max(1, t1 - t0)
+
+  const x = (t: number) => M.left + ((t - t0) / span) * INNER_W
+
+  // Adaptive vertical scale: at the poles everything happens within a few
+  // degrees of the horizon, while equatorial sites need the full +-90 range.
+  const maxAbs = useMemo(() => {
+    let m = 0
+    for (const s of samples) {
+      m = Math.max(m, Math.abs(s.sun.elevation), Math.abs(s.earth.elevation))
+    }
+    if (m < 10) return 10
+    if (m < 20) return 20
+    return Math.min(90, Math.ceil((m + 3) / 10) * 10)
+  }, [samples])
+
+  const y = (elev: number) =>
+    M.top + ((maxAbs - Math.max(-maxAbs, Math.min(maxAbs, elev))) / (2 * maxAbs)) * INNER_H
+
+  const paths = useMemo(() => {
+    const build = (key: 'sun' | 'earth') => {
+      let d = ''
+      samples.forEach((s, i) => {
+        d += `${i === 0 ? 'M' : 'L'}${x(s.t).toFixed(2)},${y(s[key].elevation).toFixed(2)}`
+      })
+      return d
+    }
+    const sunArea = () => {
+      // Filled area only where the Sun is above the horizon.
+      let d = ''
+      let open = false
+      samples.forEach((s) => {
+        const on = s.sun.elevation > 0
+        const px = x(s.t)
+        const py = y(s.sun.elevation)
+        if (on && !open) {
+          d += `M${px.toFixed(2)},${y(0).toFixed(2)}L${px.toFixed(2)},${py.toFixed(2)}`
+          open = true
+        } else if (on && open) {
+          d += `L${px.toFixed(2)},${py.toFixed(2)}`
+        } else if (!on && open) {
+          d += `L${px.toFixed(2)},${y(0).toFixed(2)}Z`
+          open = false
+        }
+      })
+      if (open) d += `L${x(t1).toFixed(2)},${y(0).toFixed(2)}Z`
+      return d
+    }
+    return { sun: build('sun'), earth: build('earth'), sunArea: sunArea() }
+  }, [samples, t0, t1, maxAbs])
+
+  const xTicks = useMemo(() => {
+    const days = span / 86_400_000
+    const stepDays = days <= 10 ? 1 : days <= 40 ? 5 : days <= 120 ? 10 : 30
+    const stepMs = stepDays * 86_400_000
+    const first = Math.ceil(t0 / stepMs) * stepMs
+    const out: number[] = []
+    for (let t = first; t <= t1; t += stepMs) out.push(t)
+    return out
+  }, [t0, t1, span])
+
+  const hovered = hoverIdx !== null ? samples[hoverIdx] : null
+
+  const pick = (clientX: number) => {
+    const svg = svgRef.current
+    if (!svg || samples.length === 0) return
+    const rect = svg.getBoundingClientRect()
+    const ratio = (clientX - rect.left) / rect.width
+    const t = t0 + ratio * span
+    // nearest sample (binary search)
+    let lo = 0
+    let hi = samples.length - 1
+    while (hi - lo > 1) {
+      const mid = (lo + hi) >> 1
+      if (samples[mid].t < t) lo = mid
+      else hi = mid
+    }
+    const idx = Math.abs(samples[lo].t - t) <= Math.abs(samples[hi].t - t) ? lo : hi
+    setHoverIdx(idx)
+    onHover?.(samples[idx])
+  }
+
+  const clear = () => {
+    setHoverIdx(null)
+    onHover?.(null)
+  }
+
+  const tooltipX = hovered ? x(hovered.t) : 0
+  const tooltipRight = tooltipX > W - 250
+
+  return (
+    <div className="chart-wrap">
+      <svg
+        ref={svgRef}
+        className="chart"
+        viewBox={`0 0 ${W} ${H}`}
+        onMouseMove={(e) => pick(e.clientX)}
+        onMouseLeave={clear}
+        onTouchMove={(e) => pick(e.touches[0].clientX)}
+        onTouchEnd={clear}
+      >
+        <defs>
+          <linearGradient id="sunFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--sun)" stopOpacity="0.34" />
+            <stop offset="100%" stopColor="var(--sun)" stopOpacity="0.02" />
+          </linearGradient>
+          <clipPath id="plot">
+            <rect x={M.left} y={M.top} width={INNER_W} height={INNER_H} />
+          </clipPath>
+        </defs>
+
+        {/* Earth-visibility (direct-to-Earth) bands */}
+        {commWindows.map((w, i) => (
+          <rect
+            key={`c${i}`}
+            x={x(w.start)}
+            y={M.top}
+            width={Math.max(1, x(w.end) - x(w.start))}
+            height={INNER_H}
+            fill="var(--earth)"
+            opacity={0.07}
+          />
+        ))}
+
+        {/* Horizontal grid */}
+        {yTicks(maxAbs).map((e) => (
+          <g key={e}>
+            <line
+              x1={M.left}
+              x2={M.left + INNER_W}
+              y1={y(e)}
+              y2={y(e)}
+              className={e === 0 ? 'grid-zero' : 'grid'}
+            />
+            <text x={M.left - 8} y={y(e) + 4} className="axis-label" textAnchor="end">
+              {e}°
+            </text>
+          </g>
+        ))}
+
+        {/* Time grid */}
+        {xTicks.map((t) => (
+          <g key={t}>
+            <line x1={x(t)} x2={x(t)} y1={M.top} y2={M.top + INNER_H} className="grid" />
+            <text x={x(t)} y={H - 10} className="axis-label" textAnchor="middle">
+              {formatDay(t)}
+            </text>
+          </g>
+        ))}
+
+        {/* Sun arc + lit area */}
+        <g clipPath="url(#plot)">
+          <path d={paths.sunArea} fill="url(#sunFill)" />
+          <path d={paths.sun} className="line-sun" />
+          <path d={paths.earth} className="line-earth" />
+        </g>
+
+        {/* Lanes: sunlight (bottom) and D2E link (top) */}
+        <rect x={M.left} y={M.top + INNER_H - 4} width={INNER_W} height={4} className="lane-bg" />
+        <rect x={M.left} y={M.top} width={INNER_W} height={4} className="lane-bg" />
+        {sunWindows.map((w, i) => (
+          <rect
+            key={`s${i}`}
+            x={x(w.start)}
+            y={M.top + INNER_H - 4}
+            width={Math.max(1, x(w.end) - x(w.start))}
+            height={4}
+            fill="var(--sun)"
+            opacity={0.85}
+          />
+        ))}
+        {commWindows.map((w, i) => (
+          <rect
+            key={`d${i}`}
+            x={x(w.start)}
+            y={M.top}
+            width={Math.max(1, x(w.end) - x(w.start))}
+            height={4}
+            fill="var(--earth)"
+            opacity={0.9}
+          />
+        ))}
+
+        {/* Crosshair */}
+        {hovered && (
+          <g pointerEvents="none">
+            <line x1={x(hovered.t)} x2={x(hovered.t)} y1={M.top} y2={M.top + INNER_H} className="crosshair" />
+            <circle cx={x(hovered.t)} cy={y(hovered.sun.elevation)} r={4} className="dot-sun" />
+            <circle cx={x(hovered.t)} cy={y(hovered.earth.elevation)} r={4} className="dot-earth" />
+            <g transform={`translate(${tooltipRight ? tooltipX - 208 : tooltipX + 12}, ${M.top + 6})`}>
+              <rect width={196} height={104} rx={8} className="tooltip-box" />
+              <text x={10} y={18} className="tooltip-time">{formatUtc(hovered.t)}</text>
+              <circle cx={14} cy={36} r={3} className="dot-sun" />
+              <text x={24} y={40} className="tooltip-line">
+                Sun {deg(hovered.sun.elevation)} · az {hovered.sun.azimuth.toFixed(0)}°
+              </text>
+              <circle cx={14} cy={56} r={3} className="dot-earth" />
+              <text x={24} y={60} className="tooltip-line">
+                Earth {deg(hovered.earth.elevation)} · az {hovered.earth.azimuth.toFixed(0)}°
+              </text>
+              <text x={10} y={80} className="tooltip-sub">
+                {hovered.sunlit ? 'Sunlit' : 'In shadow'} ·{' '}
+                {hovered.earthVisible ? 'D2E link open' : 'Earth below horizon'}
+              </text>
+              <text x={10} y={96} className="tooltip-sub">
+                Earth dist. {(hovered.earth.distanceKm / 1000).toFixed(0)}k km
+              </text>
+            </g>
+          </g>
+        )}
+      </svg>
+      <div className="chart-legend">
+        <span><i className="swatch sun" /> Solar elevation</span>
+        <span><i className="swatch earth" /> Earth elevation</span>
+        <span><i className="swatch band" /> Direct-to-Earth windows</span>
+        <span className="legend-hint">Hover to inspect a moment</span>
+      </div>
+      {hovered && (
+        <div className="hover-strip">
+          <span>{formatUtc(hovered.t)}</span>
+          <span>Sun {deg(hovered.sun.elevation)}</span>
+          <span>Earth {deg(hovered.earth.elevation)}</span>
+          <span>
+            {hovered.sunlit ? '☀ in sunlight' : '☾ in shadow'} ·{' '}
+            {hovered.earthVisible ? '📡 Earth link open' : '📡 Earth below horizon'}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
