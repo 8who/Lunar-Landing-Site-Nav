@@ -40,6 +40,28 @@ const PLAY_INTERVAL_MS = 80
 /** Date tick every five days, including both window ends. */
 const TICK_OFFSET_DAYS = Array.from({ length: SCRUB_DAYS / 5 + 1 }, (_, i) => i * 5)
 
+/** Sun icon: disc with rays. */
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <circle cx="12" cy="12" r="4.1" />
+      <path d="M12 2.2v2.1M12 19.7v2.1M2.2 12h2.1M19.7 12h2.1M4.9 4.9l1.5 1.5M17.6 17.6l1.5 1.5M19.1 4.9l-1.5 1.5M6.4 17.6l-1.5 1.5" />
+    </svg>
+  )
+}
+
+/** Earth icon: disc with simplified continents. */
+function EarthIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+      <circle cx="12" cy="12" r="8.4" />
+      <path d="M3.8 10.2h4.1l1.7 2.1 2.4-.8 1.3 1.9 2.9.4 1.9-2h2.1" />
+      <path d="M7.2 5.7l1.9 2.3 2.3.3 1.4-1.7" />
+      <path d="M8.1 18.4l1-2.3 2.5-1 1.8 1.4 2.1-.5" />
+    </svg>
+  )
+}
+
 /** Great-circle separation, degrees. */
 function angularDistanceDeg(a: LunarSite, b: LunarSite): number {
   const la1 = a.lat * RAD
@@ -186,23 +208,39 @@ export default function ExplorerMode({
       </section>
 
       <aside className="explorer-side">
-        <div className={`verdict verdict--earth ${earthUp ? 'is-up' : 'is-down'}`}>
-          <h3>Earth: {earthUp ? 'visible' : 'not visible'}</h3>
-          <p>
-            {earthUp
-              ? `Earth is ${earthDegrees} degrees above the horizon, so there is a clear line of sight (flat-terrain assumption).`
-              : 'Earth is below the horizon, no direct line of sight.'}
-          </p>
-        </div>
+        <article className={`verdict verdict--earth ${earthUp ? 'is-up' : 'is-down'}`}>
+          <div className="verdict-icon" aria-hidden="true">
+            <EarthIcon />
+          </div>
+          <div className="verdict-body">
+            <div className="verdict-top">
+              <h3>Earth</h3>
+              <span className="verdict-state">{earthUp ? 'Visible' : 'Not visible'}</span>
+            </div>
+            <p>
+              {earthUp
+                ? `Earth is ${earthDegrees} degrees above the horizon, so there is a clear line of sight (flat-terrain assumption).`
+                : 'Earth is below the horizon, no direct line of sight.'}
+            </p>
+          </div>
+        </article>
 
-        <div className={`verdict verdict--sun ${sunUp ? 'is-up' : 'is-down'}`}>
-          <h3>Sun: {sunUp ? 'visible' : 'not visible'}</h3>
-          <p>
-            {sunUp
-              ? `The Sun is ${sunDegrees} degrees above the horizon, so solar panels get light.`
-              : 'The Sun is below the horizon, so it is night here.'}
-          </p>
-        </div>
+        <article className={`verdict verdict--sun ${sunUp ? 'is-up' : 'is-down'}`}>
+          <div className="verdict-icon" aria-hidden="true">
+            <SunIcon />
+          </div>
+          <div className="verdict-body">
+            <div className="verdict-top">
+              <h3>Sun</h3>
+              <span className="verdict-state">{sunUp ? 'Visible' : 'Not visible'}</span>
+            </div>
+            <p>
+              {sunUp
+                ? `The Sun is ${sunDegrees} degrees above the horizon, so solar panels get light.`
+                : 'The Sun is below the horizon, so it is night here.'}
+            </p>
+          </div>
+        </article>
 
         <p className="daily-summary">
           Earth is visible {formatHours(daily.commMs)} of this day, the Sun{' '}
@@ -245,7 +283,17 @@ export default function ExplorerMode({
                 onClick={() => setPlaying((value) => !value)}
                 aria-pressed={playing}
               >
-                {playing ? 'Pause' : 'Play'}
+                {playing ? (
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <rect x="3.6" y="3" width="3.2" height="10" rx="1.1" />
+                    <rect x="9.2" y="3" width="3.2" height="10" rx="1.1" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M4.9 2.9 12.8 8l-7.9 5.1Z" />
+                  </svg>
+                )}
+                <span>{playing ? 'Pause' : 'Play'}</span>
               </button>
               <label className="scrub-loop">
                 <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
