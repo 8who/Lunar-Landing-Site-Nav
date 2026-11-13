@@ -19,6 +19,9 @@ export default function App() {
   const [site, setSite] = useState<LunarSite>(SITES.find((s) => s.id === 'apollo11')!)
   const [day, setDay] = useState(todayUtc)
   const [minutesOfDay, setMinutesOfDay] = useState(12 * 60)
+  // Height of the solar array / antenna mast. Raising it lowers the horizon.
+  const [mastHeightM, setMastHeightM] = useState(2)
+  const siteWithMast = useMemo(() => ({ ...site, mastHeightM }), [site, mastHeightM])
 
   const t = useMemo(() => {
     const dayStart = Date.parse(`${day}T00:00:00Z`)
@@ -64,13 +67,26 @@ export default function App() {
               Expert
             </button>
           </div>
+          <label className="mast-control" title="Height of the solar array and antenna above the ground. A taller mast sees past the Moon's curvature, so the horizon drops.">
+            <span>Mast</span>
+            <input
+              type="range"
+              min={0}
+              max={20}
+              step={0.5}
+              value={mastHeightM}
+              onChange={(e) => setMastHeightM(Number(e.target.value))}
+              aria-label="Mast height in metres"
+            />
+            <span className="mono">{mastHeightM} m</span>
+          </label>
           <span className="pill">NASA Space Apps Challenge 2026</span>
         </div>
       </header>
 
       {mode === 'explorer' ? (
         <ExplorerMode
-          site={site}
+          site={siteWithMast}
           onSiteChange={setSite}
           day={day}
           onDayChange={setDay}
@@ -79,7 +95,7 @@ export default function App() {
           t={t}
         />
       ) : (
-        <ExpertMode site={site} onSiteChange={setSite} day={day} onDayChange={setDay} t={t} />
+        <ExpertMode site={siteWithMast} onSiteChange={setSite} day={day} onDayChange={setDay} t={t} />
       )}
     </div>
   )
