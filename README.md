@@ -33,11 +33,14 @@ npm run build    # static build in dist/
 - **Date range scanner** with 5 min – 1 h resolution, from a week to a year.
 - **Visual timeline**: Sun and Earth elevation above the local horizon, direct-to-
   Earth bands, sunlight lanes, hover readout with azimuth and Earth distance.
+- **Explorer and Expert modes** with a first-person sky view over the horizon,
+  plus a solar-panel analysis that recommends the best fixed tilt and heading
+  for the selected range.
 - **Metrics**: % sunlight, % direct-to-Earth, % with both, longest continuous
   window, mean/max Sun height, solar power proxy, next sunset and next Earthset.
 
-Not yet: terrain horizon masks (LOLA), 3D sky dome, multi-site side-by-side
-comparison, export.
+Not yet: terrain horizon masks (LOLA), multi-site side-by-side comparison,
+export.
 
 ## Model
 
@@ -49,6 +52,7 @@ comparison, export.
 | Horizon | Local tangent plane, **no atmospheric refraction** (the Moon has no atmosphere) |
 | Sunlight | Upper limb of the 0.53° solar disc above the horizon; partial disc weighted by visible area |
 | Power | Visible-disc fraction × incidence × (1 AU / r)², for a **vertical Sun-tracking array** (cos e, polar-lander practice) and a flat panel (sin e). A flat panel at the pole gets ~1% of the solar constant; a vertical one ~50% |
+| Fixed panel | Score = integral of max(0, normal · Sun) over the range, relative to a perfect two-axis Sun-tracking panel; searched on a 1° tilt × 10° azimuth grid |
 | Polar caveat | Sites at \|lat\| ≥ 80° are flagged: there the flat-horizon numbers are a first guess, terrain dominates |
 | Windows | Boolean scan + bisection refinement of every horizon crossing (~1 s) |
 
