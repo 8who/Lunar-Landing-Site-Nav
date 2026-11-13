@@ -686,6 +686,229 @@ button:hover {
   color: var(--muted);
 }
 
+/* ---------- moon globe ---------- */
+.moon-globe {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 220px;
+  overflow: hidden;
+  border-radius: 12px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.moon-globe.dragging {
+  cursor: grabbing;
+}
+
+.moon-globe canvas {
+  display: block;
+}
+
+.globe-card .moon-globe {
+  height: 360px;
+}
+
+.muted-line {
+  font-style: italic;
+}
+
+/* ---------- explorer ---------- */
+.explorer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  grid-template-areas:
+    "hero side"
+    "controls controls";
+  gap: 16px;
+  align-items: stretch;
+}
+
+.explorer-hero {
+  grid-area: hero;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 520px;
+}
+
+.explorer-hero .moon-globe {
+  flex: 1;
+}
+
+.explorer-picked {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 4px 0;
+}
+
+.explorer-picked strong {
+  font-size: 20px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.explorer-picked span {
+  font-size: 12.5px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.explorer-side {
+  grid-area: side;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.verdict {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-strong);
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+}
+
+.verdict h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 640;
+}
+
+.verdict p {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.verdict--earth.is-up {
+  border-left-color: var(--earth);
+}
+
+.verdict--earth.is-up h3 {
+  color: var(--earth);
+}
+
+.verdict--sun.is-up {
+  border-left-color: var(--sun);
+}
+
+.verdict--sun.is-up h3 {
+  color: var(--sun);
+}
+
+.verdict.is-down {
+  border-left-color: var(--bad);
+}
+
+.verdict.is-down h3 {
+  color: var(--bad);
+}
+
+.daily-summary {
+  margin: 0;
+  padding: 12px 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(10, 16, 24, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+.explorer-sky {
+  padding-bottom: 12px;
+}
+
+.explorer-sky .sky-view {
+  height: 260px;
+}
+
+.explorer-controls {
+  grid-area: controls;
+  align-items: flex-end;
+}
+
+.explorer-time {
+  flex: 1;
+  min-width: 260px;
+}
+
+.day-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.day-row button {
+  width: 38px;
+  text-align: center;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.time-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.time-big {
+  min-width: 104px;
+  font-size: 28px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.time-row input[type="range"] {
+  flex: 1;
+  min-width: 160px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  accent-color: #4fd8ff;
+}
+
+.time-row input[type="range"]:focus {
+  box-shadow: none;
+}
+
+.time-range {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+@media (max-width: 1000px) {
+  .explorer {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "hero"
+      "side"
+      "controls";
+  }
+  .explorer-hero {
+    min-height: 400px;
+  }
+}
+
+@media (max-width: 680px) {
+  .time-big {
+    font-size: 22px;
+    min-width: 84px;
+  }
+  .time-range {
+    display: none;
+  }
+}
+
 @media (max-width: 1100px) {
   .kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));

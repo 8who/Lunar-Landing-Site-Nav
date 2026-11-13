@@ -45,3 +45,21 @@ export const pct = (v: number) => `${(v * 100).toFixed(1)}%`
 export function formatPercent(value: number, digits = 0): string {
   return `${value.toFixed(digits)}%`
 }
+
+/** Duration in hours with one decimal, for "X h of this day" copy. */
+export function formatHours(ms: number): string {
+  return `${(ms / 3_600_000).toFixed(1)} h`
+}
+
+/** Minutes after midnight -> HH:MM (UTC). */
+export function formatClockMinutes(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes))
+  return `${pad(Math.floor(total / 60) % 24)}:${pad(total % 60)}`
+}
+
+/** Selenographic coordinates in plain text: "0.67 N, 23.47 E". */
+export function formatCoord(lat: number, lon: number): string {
+  return `${Math.abs(lat).toFixed(2)} ${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lon).toFixed(2)} ${
+    lon >= 0 ? 'E' : 'W'
+  }`
+}

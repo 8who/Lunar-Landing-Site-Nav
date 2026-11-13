@@ -7,6 +7,10 @@ interface Props {
   sunWindows: TimeWindow[]
   commWindows: TimeWindow[]
   onHover?: (sample: SkySample | null) => void
+  /** Clicking the plot pins that moment, so it survives the pointer leaving. */
+  onPick?: (sample: SkySample) => void
+  /** Moment pinned by a click; kept on screen while nothing is hovered. */
+  pinned?: SkySample | null
 }
 
 const W = 1000
@@ -22,7 +26,14 @@ function yTicks(maxAbs: number): number[] {
   return out
 }
 
-export default function TimelineChart({ samples, sunWindows, commWindows, onHover }: Props) {
+export default function TimelineChart({
+  samples,
+  sunWindows,
+  commWindows,
+  onHover,
+  onPick,
+  pinned,
+}: Props) {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
 
@@ -90,10 +101,12 @@ export default function TimelineChart({ samples, sunWindows, commWindows, onHove
   }, [t0, t1, span])
 
   const hovered = hoverIdx !== null ? samples[hoverIdx] : null
+  // Once the pointer leaves, the clicked moment stays on screen.
+  const marker = hovered ?? pinned ?? null
 
-  const pick = (clientX: number) => {
+  const sampleAt = (clientX: number): { sample: SkySample; index: number } | null => {
     const svg = svgRef.current
-    if (!svg || samples.length === 0) return
+    if (!svg || samples.length === 0) return null
     const rect = svg.getBoundingClientRect()
     const ratio = (clientX - rect.left) / rect.width
     const t = t0 + ratio * span
@@ -105,9 +118,23 @@ export default function TimelineChart({ samples, sunWindows, commWindows, onHove
       if (samples[mid].t < t) lo = mid
       else hi = mid
     }
-    const idx = Math.abs(samples[lo].t - t) <= Math.abs(samples[hi].t - t) ? lo : hi
-    setHoverIdx(idx)
-    onHover?.(samples[idx])
+    const index = Math.abs(samples[lo].t - t) <= Math.abs(samples[hi].t - t) ? lo : hi
+    return { sample: samples[index], index }
+  }
+
+  const pick = (clientX: number) => {
+    const hit = sampleAt(clientX)
+    if (!hit) return
+    setHoverIdx(hit.index)
+    onHover?.(hit.sample)
+  }
+
+  const commit = (clientX: number) => {
+    const hit = sampleAt(clientX)
+    if (!hit) return
+    setHoverIdx(hit.index)
+    onHover?.(hit.sample)
+    onPick?.(hit.sample)
   }
 
   const clear = () => {
@@ -115,7 +142,7 @@ export default function TimelineChart({ samples, sunWindows, commWindows, onHove
     onHover?.(null)
   }
 
-  const tooltipX = hovered ? x(hovered.t) : 0
+  const tooltipX = marker ? x(marker.t) : 0
   const tooltipRight = tooltipX > W - 250
 
   return (
@@ -126,8 +153,9 @@ export default function TimelineChart({ samples, sunWindows, commWindows, onHove
         viewBox={`0 0 ${W} ${H}`}
         onMouseMove={(e) => pick(e.clientX)}
         onMouseLeave={clear}
+        onClick={(e) => commit(e.clientX)}
         onTouchMove={(e) => pick(e.touches[0].clientX)}
-        onTouchEnd={clear}
+        onTouchEnd={(e) => commit(e.changedTouches[0].clientX)}
       >
         <defs>
           <linearGradient id="sunFill" x1="0" y1="0" x2="0" y2="1">
@@ -212,28 +240,31 @@ export default function TimelineChart({ samples, sunWindows, commWindows, onHove
         ))}
 
         {/* Crosshair */}
-        {hovered && (
+        {marker && (
           <g pointerEvents="none">
-            <line x1={x(hovered.t)} x2={x(hovered.t)} y1={M.top} y2={M.top + INNER_H} className="crosshair" />
-            <circle cx={x(hovered.t)} cy={y(hovered.sun.elevation)} r={4} className="dot-sun" />
-            <circle cx={x(hovered.t)} cy={y(hovered.earth.elevation)} r={4} className="dot-earth" />
+            <line x1={x(marker.t)} x2={x(marker.t)} y1={M.top} y2={M.top + INNER_H} className="crosshair" />
+            <circle cx={x(marker.t)} cy={y(marker.sun.elevation)} r={4} className="dot-sun" />
+            <circle cx={x(marker.t)} cy={y(marker.earth.elevation)} r={4} className="dot-earth" />
             <g transform={`translate(${tooltipRight ? tooltipX - 208 : tooltipX + 12}, ${M.top + 6})`}>
               <rect width={196} height={104} rx={8} className="tooltip-box" />
-              <text x={10} y={18} className="tooltip-time">{formatUtc(hovered.t)}</text>
+              <text x={10} y={18} className="tooltip-time">
+                {formatUtc(marker.t)}
+                {hovered ? '' : ' · pinned'}
+              </text>
               <circle cx={14} cy={36} r={3} className="dot-sun" />
               <text x={24} y={40} className="tooltip-line">
-                Sun {deg(hovered.sun.elevation)} · az {hovered.sun.azimuth.toFixed(0)}°
+                Sun {deg(marker.sun.elevation)} · az {marker.sun.azimuth.toFixed(0)}°
               </text>
               <circle cx={14} cy={56} r={3} className="dot-earth" />
               <text x={24} y={60} className="tooltip-line">
-                Earth {deg(hovered.earth.elevation)} · az {hovered.earth.azimuth.toFixed(0)}°
+                Earth {deg(marker.earth.elevation)} · az {marker.earth.azimuth.toFixed(0)}°
               </text>
               <text x={10} y={80} className="tooltip-sub">
-                {hovered.sunlit ? 'Sunlit' : 'In shadow'} ·{' '}
-                {hovered.earthVisible ? 'D2E link open' : 'Earth below horizon'}
+                {marker.sunlit ? 'Sunlit' : 'In shadow'} ·{' '}
+                {marker.earthVisible ? 'D2E link open' : 'Earth below horizon'}
               </text>
               <text x={10} y={96} className="tooltip-sub">
-                Earth dist. {(hovered.earth.distanceKm / 1000).toFixed(0)}k km
+                Earth dist. {(marker.earth.distanceKm / 1000).toFixed(0)}k km
               </text>
             </g>
           </g>
@@ -243,16 +274,16 @@ export default function TimelineChart({ samples, sunWindows, commWindows, onHove
         <span><i className="swatch sun" /> Solar elevation</span>
         <span><i className="swatch earth" /> Earth elevation</span>
         <span><i className="swatch band" /> Direct-to-Earth windows</span>
-        <span className="legend-hint">Hover to inspect a moment</span>
+        <span className="legend-hint">Hover to inspect · click to pin a moment</span>
       </div>
-      {hovered && (
+      {marker && (
         <div className="hover-strip">
-          <span>{formatUtc(hovered.t)}</span>
-          <span>Sun {deg(hovered.sun.elevation)}</span>
-          <span>Earth {deg(hovered.earth.elevation)}</span>
+          <span>{formatUtc(marker.t)}</span>
+          <span>Sun {deg(marker.sun.elevation)}</span>
+          <span>Earth {deg(marker.earth.elevation)}</span>
           <span>
-            {hovered.sunlit ? '☀ in sunlight' : '☾ in shadow'} ·{' '}
-            {hovered.earthVisible ? '📡 Earth link open' : '📡 Earth below horizon'}
+            {marker.sunlit ? '☀ in sunlight' : '☾ in shadow'} ·{' '}
+            {marker.earthVisible ? '📡 Earth link open' : '📡 Earth below horizon'}
           </span>
         </div>
       )}
