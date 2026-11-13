@@ -25,12 +25,12 @@ export function timeToSliderMinutes(windowStart: number, t: number): number {
   return Math.min(SCRUB_MAX_MIN, Math.max(0, minutes))
 }
 
-/** Minutes after UTC midnight, rounded down to `step` and capped at 1435. */
+/** Minutes after UTC midnight, rounded down to `step` and capped at the last valid step of the day. */
 export function minutesOfDayUtc(t: number, step = 5): number {
   const d = new Date(t)
   const afterMidnight = d.getUTCHours() * 60 + d.getUTCMinutes()
   const rounded = Math.floor(afterMidnight / step) * step
-  return Math.min(1435, rounded)
+  return Math.min(Math.floor(1439 / step) * step, rounded)
 }
 
 /** 'YYYY-MM-DD' for an instant, UTC. */

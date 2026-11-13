@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { renderMissionBrief } from '../lib/missionBrief'
 import { findMissionWindow } from '../lib/astro/mission'
 import type { LunarSite, TimeWindow } from '../lib/astro/types'
-import { formatDuration, formatUtc, formatCoord } from '../lib/format'
+import { formatDuration, formatUtc } from '../lib/format'
 
 interface Props {
   site: LunarSite
@@ -16,23 +17,11 @@ export default function MissionPlanner({ site, windows, now, end, onJump }: Prop
   const next = findMissionWindow(windows, now, hours)
 
   function downloadBrief() {
-    const text = [
-      'LUNAR LANDING SITE NAVIGATOR — MISSION BRIEF',
-      `Site: ${site.name} (${formatCoord(site.lat, site.lon)})`,
-      `Coordinates: ${site.approx ? 'Approximate' : 'Curated / custom'}`,
-      `Search: ${formatUtc(now)} to ${formatUtc(end)}`,
-      `Required continuous operation: ${hours} hours`,
-      next ? `Operation starts: ${formatUtc(next.start)}` : 'No matching window in the search range.',
-      next ? `Operation ends: ${formatUtc(next.start + hours * 3_600_000)}` : '',
-      next ? `Overlap available in range: ${formatDuration(next.end - next.start)}` : '',
-      '', 'Model: Sun and Earth centres above a flat local horizon. Terrain, slopes, relay links, thermal limits and link budgets are not modelled.',
-      'Geometric screening only; this is not a landing safety assessment.',
-      site.source ? `Coordinate source: ${site.source}` : '',
-    ].filter(Boolean).join('\n')
-    const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }))
+    const html = renderMissionBrief(site, now, end, hours, next)
+    const url = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = `lunar-mission-${site.id}.txt`
+    a.download = `lunar-mission-${site.id}.html`
     a.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
@@ -54,8 +43,8 @@ export default function MissionPlanner({ site, windows, now, end, onJump }: Prop
         {next && <p>{formatDuration(next.end - next.start)} of overlap available{!next.closed ? ' or more; search ends here' : ''}. Your {hours}-hour operation ends {formatUtc(next.start + hours * 3_600_000)}.</p>}
       </div>
       <div className="mission-actions">
-        <button disabled={!next} onClick={() => next && onJump(next.start)}>Jump to window →</button>
-        <button onClick={downloadBrief}>Download mission brief ↓</button>
+        <button disabled={!next || next.start === now} onClick={() => next && onJump(next.start)}>{next?.start === now ? 'At window start ✓' : 'Jump to window →'}</button>
+        <button onClick={downloadBrief}>Download briefing (HTML) ↓</button>
       </div>
       <p className="mission-assumption">Flat-horizon estimate · Terrain and relay links not modelled · Visibility does not guarantee power or a working radio link.</p>
     </section>

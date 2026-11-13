@@ -79,7 +79,7 @@ function commitInstant(
   onMinutesChange: (minutes: number) => void,
 ) {
   onDayChange(utcDay(next))
-  onMinutesChange(minutesOfDayUtc(next))
+  onMinutesChange(minutesOfDayUtc(next, 1))
 }
 
 export default function ExplorerMode({
@@ -371,7 +371,7 @@ export default function ExplorerMode({
               type="range"
               min={0}
               max={SCRUB_MAX_MIN}
-              step={15}
+              step={1}
               value={scrubValue}
               onChange={(e) => scrubTo(Number(e.target.value))}
               onPointerDown={() => setPlaying(false)}

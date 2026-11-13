@@ -98,7 +98,7 @@ In Explorer, select a named site or click the globe, select a UTC date, then cho
 1–72 hours under **Find a working window**. The planner searches from the current
 playhead to the end of the displayed 30-day cycle for continuous simultaneous
 sunlight and direct Earth visibility. Jump to the earliest matching operation or
-download a text mission brief. Starts round up to the next selectable UTC minute.
+download a styled, printable HTML mission brief. Starts round up to the next selectable UTC minute.
 An open-ended overlap is clipped to the search end; no visibility beyond that end
 is assumed. An empty result means no match in this range, not that the site is
 universally unsuitable.

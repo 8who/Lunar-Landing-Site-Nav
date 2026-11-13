@@ -60,3 +60,9 @@ describe('windowPercent', () => {
     expect(windowPercent(START, START + SCRUB_SPAN_MS + 1)).toBe(100)
   })
 })
+
+// Mission jumps must preserve the minute selected by the planner.
+it('preserves minute precision through the end of a UTC day', () => {
+  expect(minutesOfDayUtc(Date.parse('2026-11-14T23:59:00Z'), 1)).toBe(1439)
+  expect(minutesOfDayUtc(Date.parse('2026-11-14T12:03:00Z'), 1)).toBe(723)
+})
