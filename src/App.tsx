@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import TimelineChart from './components/TimelineChart'
 import RankingTable from './components/RankingTable'
+import SkyView from './components/SkyView'
 import { buildTimeline } from './lib/astro/timeline'
 import { rankSites, type RankSortKey, type RankedSite } from './lib/astro/ranking'
 import { SITES, customSite } from './lib/astro/sites'
@@ -274,6 +275,19 @@ export default function App() {
           commWindows={commWindows}
           onHover={setHover}
         />
+      </section>
+
+      <section className="chart-card sky-card">
+        <div className="chart-head">
+          <div>
+            <h2>Sky view</h2>
+            <p>
+              First person from {site.name} · {formatUtc(focus.t, { seconds: true })}
+            </p>
+          </div>
+          <p className="sky-hint">Drag to look around</p>
+        </div>
+        <SkyView site={site} t={focus.t} />
       </section>
         </>
       ) : (
