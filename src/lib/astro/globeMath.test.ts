@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { lunarVector, vectorToLatLon, yawToFaceLon, type Vec3 } from './globeMath'
+import {
+  lunarVector,
+  sphereGeometryPoint,
+  textureUV,
+  vectorToLatLon,
+  yawToFaceLon,
+  type Vec3,
+} from './globeMath'
 
 /** Group rotation used by MoonGlobe to put lunar +z (north) up. */
 function rotateX(v: Vec3, angle: number): Vec3 {
@@ -37,6 +44,38 @@ describe('lunarVector / vectorToLatLon', () => {
   it('respects the radius', () => {
     const v = lunarVector(12.5, -77.25, 2.5)
     expect(Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z)).toBeCloseTo(2.5, 12)
+  })
+})
+
+describe('textureUV / sphereGeometryPoint', () => {
+  it('puts longitude 0 at the image centre and the north pole at the top', () => {
+    expect(textureUV(0, 0)).toEqual({ u: 0.5, v: 0.5 })
+    expect(textureUV(90, 180)).toEqual({ u: 1, v: 1 })
+    expect(textureUV(-90, -180)).toEqual({ u: 0, v: 0 })
+  })
+
+  it('maps a texture coordinate onto the lunar body-fixed frame', () => {
+    const cases = [
+      { lat: 0.674, lon: 23.473 }, // Apollo 11, Tranquility Base
+      { lat: -3.012, lon: -23.422 }, // Apollo 12
+      { lat: -45.457, lon: 177.588 }, // Chang'e 4
+      { lat: -89.66, lon: 129.2 }, // Shackleton rim
+      { lat: 0, lon: -90 },
+      { lat: 0, lon: 0 },
+      { lat: 0, lon: 90 },
+      { lat: 0, lon: 180 },
+    ]
+
+    for (const { lat, lon } of cases) {
+      const { u, v } = textureUV(lat, lon)
+      const g = sphereGeometryPoint(u, v)
+      // sphere.rotation.x = +PI/2 inside the globe group: (x, y, z) -> (x, -z, y).
+      const lunar = { x: g.x, y: -g.z, z: g.y }
+      const expected = lunarVector(lat, lon, 1)
+      expect(Math.abs(lunar.x - expected.x)).toBeLessThan(1e-9)
+      expect(Math.abs(lunar.y - expected.y)).toBeLessThan(1e-9)
+      expect(Math.abs(lunar.z - expected.z)).toBeLessThan(1e-9)
+    }
   })
 })
 

@@ -38,6 +38,32 @@ export function vectorToLatLon(x: number, y: number, z: number): { lat: number; 
 }
 
 /**
+ * Texture coordinate for an equirectangular lunar map: longitude 0 at the
+ * image centre, longitude increasing eastward to the right, north up.
+ */
+export function textureUV(latDeg: number, lonDeg: number): { u: number; v: number } {
+  return { u: 0.5 + lonDeg / 360, v: 0.5 + latDeg / 180 }
+}
+
+/**
+ * Vertex of three's SphereGeometry (radius 1) for a texture coordinate.
+ *
+ * Matches three's sphere UV layout: the pole axis is +Y, and with flipY the
+ * image's up direction maps to +Y. Rotating the result +90 deg about X gives
+ * the lunar body-fixed vector (x, -z, y).
+ */
+export function sphereGeometryPoint(u: number, v: number): Vec3 {
+  const phi = 2 * Math.PI * u
+  const theta = Math.PI * (1 - v)
+  const sinTheta = Math.sin(theta)
+  return {
+    x: -Math.cos(phi) * sinTheta,
+    y: Math.cos(theta),
+    z: Math.sin(phi) * sinTheta,
+  }
+}
+
+/**
  * Yaw about the world +Y axis (the orbit group) that brings the given
  * selenographic longitude to face the camera.
  *

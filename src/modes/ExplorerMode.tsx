@@ -205,6 +205,7 @@ export default function ExplorerMode({
           <strong>{formatCoord(site.lat, site.lon)}</strong>
           <span>{nearest ? nearest.name : 'Custom point'}</span>
         </div>
+        <p className="globe-caption">Moon map: NASA&apos;s Scientific Visualization Studio / LRO</p>
       </section>
 
       <aside className="explorer-side">

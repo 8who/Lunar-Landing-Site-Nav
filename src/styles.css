@@ -936,6 +936,22 @@ button {
   color: var(--muted);
 }
 
+.globe-caption {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 13px;
+  z-index: 3;
+  margin: 0;
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: 0.01em;
+  color: var(--muted);
+  opacity: 0.72;
+  pointer-events: none;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.95);
+}
+
 .explorer-side {
   grid-area: side;
   display: flex;
