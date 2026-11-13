@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
+import { lunarVector, vectorToLatLon, yawToFaceLon } from '../lib/astro/globeMath'
 import type { LunarSite } from '../lib/astro/types'
 
 interface Props {
@@ -14,17 +15,11 @@ const RADIUS = 1
 const PITCH_LIMIT = 80 * RAD
 const CLICK_SLOP_PX = 5
 const DRAG_RAD_PER_PX = 0.006
-
-/** Lunar body-fixed vector (z = north) for a selenographic coordinate. */
-function lunarVector(lat: number, lon: number, radius: number): THREE.Vector3 {
-  const la = lat * RAD
-  const lo = lon * RAD
-  return new THREE.Vector3(
-    Math.cos(la) * Math.cos(lo),
-    Math.cos(la) * Math.sin(lo),
-    Math.sin(la),
-  ).multiplyScalar(radius)
-}
+/** A newly selected site farther than this from the view centre is rotated in. */
+const FOCUS_MAX_DEG = 40
+/** Keep polar sites off the limb instead of showing them edge-on. */
+const FOCUS_PITCH_LIMIT = 35 * RAD
+const FOCUS_MS = 400
 
 /** Equirectangular grey Moon: maria plus a few hundred craters, fixed seed. */
 function makeMoonTexture(): THREE.CanvasTexture {
@@ -80,6 +75,7 @@ function makeMoonTexture(): THREE.CanvasTexture {
 export default function MoonGlobe({ sites, selected, onPick }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const markersRef = useRef<(list: LunarSite[], selectedId: string | null) => void>(() => {})
+  const focusRef = useRef<(site: LunarSite) => void>(() => {})
   const pickRef = useRef(onPick)
 
   useEffect(() => {
@@ -136,17 +132,45 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     rimLight.position.set(-3, -2, 1)
     scene.add(rimLight)
 
-    const yaw = { current: 0 }
-    const pitch = { current: 0 }
+    const yaw = { current: yawToFaceLon(selected?.lon ?? 0) }
+    const pitch = {
+      current: Math.max(
+        -FOCUS_PITCH_LIMIT,
+        Math.min(FOCUS_PITCH_LIMIT, (selected?.lat ?? 0) * RAD),
+      ),
+    }
+    // Rotation to a newly picked site; driven from the render loop so it is
+    // frame-rate independent while the slider/selection keeps changing.
+    const anim = {
+      active: false,
+      start: 0,
+      duration: FOCUS_MS,
+      fromYaw: yaw.current,
+      fromPitch: pitch.current,
+      toYaw: yaw.current,
+      toPitch: pitch.current,
+    }
+    const easeOut = (u: number) => 1 - (1 - u) ** 3
+
     let dirty = true
     let raf = 0
-    const draw = () => {
+    const draw = (now: number) => {
       raf = requestAnimationFrame(draw)
+      if (anim.active) {
+        const u = Math.min(1, Math.max(0, (now - anim.start) / anim.duration))
+        const eased = easeOut(u)
+        yaw.current = anim.fromYaw + (anim.toYaw - anim.fromYaw) * eased
+        pitch.current = anim.fromPitch + (anim.toPitch - anim.fromPitch) * eased
+        if (u >= 1) anim.active = false
+        dirty = true
+      }
       if (!dirty) return
       dirty = false
       orbit.rotation.set(pitch.current, yaw.current, 0)
       renderer.render(scene, camera)
     }
+    // Apply the initial view even if the first animation frame is delayed.
+    orbit.rotation.set(pitch.current, yaw.current, 0)
     raf = requestAnimationFrame(draw)
 
     markersRef.current = (list, selectedId) => {
@@ -172,6 +196,19 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       dirty = true
     }
 
+    // Angle between the view centre and a selenographic point, in degrees.
+    const X_AXIS = new THREE.Vector3(1, 0, 0)
+    const Y_AXIS = new THREE.Vector3(0, 1, 0)
+    const facingAngleDeg = (lat: number, lon: number) => {
+      const v = lunarVector(lat, lon, 1)
+      const point = new THREE.Vector3(v.x, v.y, v.z)
+      // Same order as the scene graph: globe tilt, orbit yaw, orbit pitch.
+      point.applyAxisAngle(X_AXIS, -Math.PI / 2)
+      point.applyAxisAngle(Y_AXIS, yaw.current)
+      point.applyAxisAngle(X_AXIS, pitch.current)
+      return Math.acos(Math.min(1, Math.max(-1, point.z / point.length()))) * DEG
+    }
+
     const resize = () => {
       const width = host.clientWidth
       const height = host.clientHeight
@@ -193,14 +230,14 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1
       pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1
       scene.updateMatrixWorld(true)
+      // rAF can be paused (background/occluded tab); do not rely on the last
+      // render having refreshed the camera matrices.
+      camera.updateMatrixWorld()
       raycaster.setFromCamera(pointer, camera)
       const hit = raycaster.intersectObject(sphere, false)[0]
       if (!hit) return
       const local = sphere.worldToLocal(hit.point.clone())
-      const radius = local.length()
-      if (radius === 0) return
-      const lat = Math.asin(Math.min(1, Math.max(-1, local.z / radius))) * DEG
-      const lon = Math.atan2(local.y, local.x) * DEG
+      const { lat, lon } = vectorToLatLon(local.x, local.y, local.z)
       pickRef.current(lat, lon)
     }
 
@@ -209,6 +246,8 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     let lastX = 0
     let lastY = 0
     const onPointerDown = (event: PointerEvent) => {
+      // A drag takes over from any in-flight focus animation.
+      anim.active = false
       dragging = true
       moved = 0
       lastX = event.clientX
@@ -243,6 +282,31 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     host.addEventListener('pointerup', onPointerUp)
     host.addEventListener('pointercancel', onPointerUp)
 
+    // Selecting a site far from the current centre swings it into view.
+    focusRef.current = (site) => {
+      if (dragging) return
+      if (facingAngleDeg(site.lat, site.lon) <= FOCUS_MAX_DEG) return
+      const targetPitch = Math.max(
+        -FOCUS_PITCH_LIMIT,
+        Math.min(FOCUS_PITCH_LIMIT, site.lat * RAD),
+      )
+      // Shortest way round: a longitude repeats every full turn.
+      const targetYaw = yawToFaceLon(site.lon)
+      const delta =
+        (((targetYaw - yaw.current + Math.PI) % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) -
+        Math.PI
+      // Polar sites keep their clamped pitch, so a re-selection may need no move.
+      if (Math.abs(delta) < 1e-6 && Math.abs(targetPitch - pitch.current) < 1e-6) return
+      anim.fromYaw = yaw.current
+      anim.fromPitch = pitch.current
+      anim.toYaw = yaw.current + delta
+      anim.toPitch = targetPitch
+      anim.start = performance.now()
+      anim.duration = FOCUS_MS
+      anim.active = true
+      dirty = true
+    }
+
     return () => {
       cancelAnimationFrame(raf)
       observer.disconnect()
@@ -251,6 +315,7 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       host.removeEventListener('pointerup', onPointerUp)
       host.removeEventListener('pointercancel', onPointerUp)
       markersRef.current = () => {}
+      focusRef.current = () => {}
       markers.geometry.dispose()
       markers.material.dispose()
       markers.parent?.remove(markers)
@@ -263,7 +328,10 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
   }, [])
 
   useEffect(() => {
-    markersRef.current(sites, selected?.id ?? null)
+    // Custom picks are not part of the curated list; keep their marker visible.
+    const list = selected && !sites.some((s) => s.id === selected.id) ? [...sites, selected] : sites
+    markersRef.current(list, selected?.id ?? null)
+    if (selected) focusRef.current(selected)
   }, [sites, selected])
 
   return <div className="moon-globe" ref={hostRef} />
