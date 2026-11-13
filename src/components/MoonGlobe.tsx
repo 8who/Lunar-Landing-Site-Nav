@@ -99,6 +99,9 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     const geometry = new THREE.SphereGeometry(RADIUS, 96, 64)
     const material = new THREE.MeshStandardMaterial({ map: texture, roughness: 1, metalness: 0 })
     const sphere = new THREE.Mesh(geometry, material)
+    // SphereGeometry's pole is +Y, but the group below rotates the lunar frame
+    // so +z is up. Tilt the textured sphere by the inverse angle.
+    sphere.rotation.x = Math.PI / 2
 
     // The sphere is modelled with lunar +z at its pole, so tip it to put the
     // north pole up. Everything below inherits that rotation.
@@ -124,7 +127,7 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     orbit.add(globe)
     scene.add(orbit)
 
-    scene.add(new THREE.AmbientLight(0x8899aa, 0.35))
+    scene.add(new THREE.AmbientLight(0x8899aa, 0.5))
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.5)
     keyLight.position.set(2.4, 1.6, 3.4)
     scene.add(keyLight)
@@ -172,6 +175,31 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     // Apply the initial view even if the first animation frame is delayed.
     orbit.rotation.set(pitch.current, yaw.current, 0)
     raf = requestAnimationFrame(draw)
+
+    // Real map: public/moon.jpg (NASA SVS, 2048x1024, longitude 0 at centre,
+    // north up). The procedural texture paints the globe until it arrives and
+    // stays as the fallback if the image cannot be loaded.
+    let disposed = false
+    new THREE.TextureLoader().load(
+      `${import.meta.env.BASE_URL}moon.jpg`,
+      (loaded) => {
+        if (disposed) {
+          loaded.dispose()
+          return
+        }
+        loaded.colorSpace = THREE.SRGBColorSpace
+        loaded.anisotropy = renderer.capabilities.getMaxAnisotropy()
+        const previous = material.map
+        material.map = loaded
+        material.needsUpdate = true
+        if (previous && previous !== loaded) previous.dispose()
+        dirty = true
+      },
+      undefined,
+      () => {
+        // Keep the procedural Moon so the globe still renders offline.
+      },
+    )
 
     markersRef.current = (list, selectedId) => {
       const positions = new Float32Array(list.length * 3)
@@ -236,7 +264,7 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       raycaster.setFromCamera(pointer, camera)
       const hit = raycaster.intersectObject(sphere, false)[0]
       if (!hit) return
-      const local = sphere.worldToLocal(hit.point.clone())
+      const local = globe.worldToLocal(hit.point.clone())
       const { lat, lon } = vectorToLatLon(local.x, local.y, local.z)
       pickRef.current(lat, lon)
     }
@@ -308,6 +336,7 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     }
 
     return () => {
+      disposed = true
       cancelAnimationFrame(raf)
       observer.disconnect()
       host.removeEventListener('pointerdown', onPointerDown)
@@ -320,8 +349,10 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       markers.material.dispose()
       markers.parent?.remove(markers)
       geometry.dispose()
+      // Dispose whichever map is bound: the real one if it loaded, else the
+      // procedural fallback. A late load disposes itself via `disposed`.
+      material.map?.dispose()
       material.dispose()
-      texture.dispose()
       renderer.dispose()
       if (renderer.domElement.parentNode === host) host.removeChild(renderer.domElement)
     }
