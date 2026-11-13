@@ -5,6 +5,7 @@
  * used by SkyDirection (azimuth 0 = north, 90 = east).
  */
 
+import { discFractionAbove } from './observer'
 import type { SkySample } from './types'
 
 export interface PanelVector {
@@ -72,7 +73,11 @@ export function bestFixedPanel(samples: SkySample[]): {
     const dt = b.t - a.t
     if (!(dt > 0)) continue
     const midElevation = (a.sun.elevation + b.sun.elevation) / 2
-    if (midElevation <= 0) continue
+    // Same limb criterion as timeline: the Sun counts while any part of its
+    // disc is above the flat horizon, and a partial disc contributes pro rata.
+    const rSun = (a.sun.angularDiameterDeg + b.sun.angularDiameterDeg) / 4
+    const visible = discFractionAbove(midElevation, rSun)
+    if (visible <= 0) continue
 
     // Shortest signed azimuth step, so a pair straddling north interpolates
     // through 0/360 rather than through the far side of the compass.
@@ -84,8 +89,8 @@ export function bestFixedPanel(samples: SkySample[]): {
     east[intervals] = sun.e
     north[intervals] = sun.n
     up[intervals] = sun.u
-    weight[intervals] = dt
-    sunUpMs += dt
+    weight[intervals] = dt * visible
+    sunUpMs += dt * visible
     intervals++
   }
 
