@@ -5,3 +5,6 @@ dist-ssr
 .vite
 .DS_Store
 *.log
+
+# Local OpenCode skills / session config
+.opencode/
