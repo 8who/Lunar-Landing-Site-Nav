@@ -23,7 +23,7 @@ export const SITES: LunarSite[] = [
   { id: 'change4', name: "Chang'e 4 · Von Kármán", lat: -45.457, lon: 177.588, category: 'international', note: 'First far-side landing, 2019' },
   { id: 'change5', name: "Chang'e 5 · Mons Rümker", lat: 43.06, lon: -51.92, category: 'international', note: 'Sample return, 2020' },
   { id: 'change6', name: "Chang'e 6 · Apollo Basin", lat: -41.64, lon: -153.99, category: 'international', note: 'Far-side sample return, 2024' },
-  { id: 'chandrayaan3', name: 'Chandrayaan-3 · Vikram', lat: 69.373, lon: 32.319, category: 'international', note: 'South polar region, 2023' },
+  { id: 'chandrayaan3', name: 'Chandrayaan-3 · Vikram', lat: -69.373, lon: 32.319, category: 'international', note: 'South polar region, 2023' },
   { id: 'slim', name: 'SLIM · Shioli', lat: -13.316, lon: 25.251, category: 'international', note: 'JAXA pinpoint landing, 2024' },
 
   // ---- CLPS / commercial -------------------------------------------------
@@ -34,7 +34,7 @@ export const SITES: LunarSite[] = [
   { id: 'monsmouton', name: 'Mons Mouton (candidate)', lat: -84.6, lon: 31.0, category: 'candidate', note: 'Artemis candidate region', approx: true },
   { id: 'malapert', name: 'Malapert Massif (candidate)', lat: -86.0, lon: 2.9, category: 'candidate', note: 'Artemis candidate region', approx: true },
   { id: 'connectingridge', name: 'Connecting Ridge (candidate)', lat: -89.44, lon: 137.3, category: 'candidate', note: 'Artemis candidate region', approx: true },
-  { id: 'shackleton', name: 'Shackleton rim', lat: -89.66, lon: 129.2, category: 'candidate', note: 'Near-continuous illumination', approx: true },
+  { id: 'shackleton', name: 'Shackleton rim', lat: -89.66, lon: 129.2, category: 'candidate', note: 'Near-continuous illumination in reality; flat-horizon model here (terrain masks = next step)', approx: true },
   { id: 'degerlache', name: 'de Gerlache rim', lat: -88.5, lon: -87.1, category: 'candidate', note: 'Artemis candidate region', approx: true },
   { id: 'cabeus', name: 'Cabeus · LCROSS impact', lat: -85.33, lon: -42.13, category: 'candidate', note: 'Permanently shadowed crater', approx: true },
   { id: 'southpole', name: 'Lunar South Pole', lat: -89.9, lon: 0, category: 'candidate', note: 'Reference point', approx: true },
