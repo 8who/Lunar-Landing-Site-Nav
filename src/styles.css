@@ -533,6 +533,9 @@ button {
 .earth-text {
   color: var(--earth);
 }
+.panel-text {
+  color: #4fd6e8;
+}
 .ok-text {
   color: var(--ok);
 }

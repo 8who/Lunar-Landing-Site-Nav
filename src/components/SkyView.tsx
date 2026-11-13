@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { createObserver } from '../lib/astro/observer'
+import { panelNormalSky, tiltArcPoints } from '../lib/astro/panel'
+import { isTerrainCritical } from '../lib/astro/sites'
 import type { LunarSite, SkySample } from '../lib/astro/types'
 import { deg } from '../lib/format'
 
@@ -8,6 +10,8 @@ interface Props {
   site: LunarSite
   /** UTC epoch ms */
   t: number
+  /** Best fixed panel to mark on the sky, or null to hide it. */
+  panel?: { tiltDeg: number; azimuthDeg: number } | null
 }
 
 const RAD = Math.PI / 180
@@ -103,9 +107,13 @@ function makeStars(): THREE.Points {
   return new THREE.Points(geometry, material)
 }
 
-export default function SkyView({ site, t }: Props) {
+export default function SkyView({ site, t, panel }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const updateRef = useRef<(sample: SkySample, siteId: string) => void>(() => {})
+  const updatePanelRef = useRef<(panel: Props['panel']) => void>(() => {})
+  // The scene effect runs once, so it reads the latest prop through this ref.
+  const latestPanelRef = useRef<Props['panel']>(panel ?? null)
+  latestPanelRef.current = panel ?? null
   const [sky, setSky] = useState<SkySample | null>(null)
 
   useEffect(() => {
@@ -193,6 +201,33 @@ export default function SkyView({ site, t }: Props) {
     earthGroup.add(earth, clouds, earthGlow)
     scene.add(earthGroup)
 
+    // Best fixed-panel marker: cyan ring at the normal, an arc from the zenith
+    // down to it, and a tick at the zenith. Hidden until a panel is provided.
+    const panelMaterial = new THREE.MeshBasicMaterial({
+      color: 0x4fd6e8,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    })
+    const panelGroup = new THREE.Group()
+    panelGroup.visible = false
+
+    const panelMarker = new THREE.Mesh(new THREE.RingGeometry(1.6, 2.4, 48), panelMaterial)
+    panelGroup.add(panelMarker)
+
+    const panelArc = new THREE.Line(
+      new THREE.BufferGeometry(),
+      new THREE.LineBasicMaterial({ color: 0x4fd6e8, transparent: true, opacity: 0.6 }),
+    )
+    panelGroup.add(panelArc)
+
+    const zenithTick = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 8), panelMaterial)
+    zenithTick.position.copy(skyVector(0, 90, SKY_RADIUS - 2))
+    panelGroup.add(zenithTick)
+
+    scene.add(panelGroup)
+
     // Camera state lives outside React: dragging must not re-render the tree.
     const yaw = { current: 0 }
     const pitch = { current: 0 }
@@ -236,6 +271,37 @@ export default function SkyView({ site, t }: Props) {
         yaw.current = -target.azimuth * RAD
         pitch.current = clamp(target.elevation, PITCH_MIN_DEG, PITCH_MAX_DEG) * RAD
       }
+      dirty = true
+    }
+
+    updatePanelRef.current = (next) => {
+      if (!next) {
+        panelGroup.visible = false
+        dirty = true
+        return
+      }
+
+      const normal = panelNormalSky(next.tiltDeg, next.azimuthDeg)
+      panelMarker.position.copy(skyVector(normal.azimuth, normal.elevation, SKY_RADIUS - 2))
+      panelMarker.lookAt(0, 0, 0)
+
+      const angles = tiltArcPoints(next.tiltDeg, next.azimuthDeg)
+      const positions = new Float32Array(angles.length * 3)
+      for (let i = 0; i < angles.length; i++) {
+        const point = skyVector(angles[i].azimuth, angles[i].elevation, SKY_RADIUS - 2)
+        positions[i * 3] = point.x
+        positions[i * 3 + 1] = point.y
+        positions[i * 3 + 2] = point.z
+      }
+      // Replacing the attribute needs a fresh geometry: dispose the old one.
+      panelArc.geometry.dispose()
+      panelArc.geometry = new THREE.BufferGeometry()
+      panelArc.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+
+      const flat = next.tiltDeg === 0
+      panelArc.visible = !flat
+      zenithTick.visible = !flat
+      panelGroup.visible = true
       dirty = true
     }
 
@@ -289,6 +355,9 @@ export default function SkyView({ site, t }: Props) {
     host.addEventListener('pointerup', onPointerUp)
     host.addEventListener('pointercancel', onPointerUp)
 
+    // The scene effect runs once: apply the panel present on first mount.
+    updatePanelRef.current(latestPanelRef.current)
+
     return () => {
       cancelAnimationFrame(raf)
       observer.disconnect()
@@ -297,6 +366,7 @@ export default function SkyView({ site, t }: Props) {
       host.removeEventListener('pointerup', onPointerUp)
       host.removeEventListener('pointercancel', onPointerUp)
       updateRef.current = () => {}
+      updatePanelRef.current = () => {}
       scene.traverse((object) => {
         // Sprite geometries are shared by every Sprite in the module: never dispose them.
         if (!(object as THREE.Sprite).isSprite) (object as THREE.Mesh).geometry?.dispose()
@@ -316,6 +386,10 @@ export default function SkyView({ site, t }: Props) {
     setSky(sample)
   }, [site, t])
 
+  useEffect(() => {
+    updatePanelRef.current(panel ?? null)
+  }, [panel])
+
   return (
     <div className="sky-view">
       <div className="sky-canvas" ref={hostRef} />
@@ -328,6 +402,15 @@ export default function SkyView({ site, t }: Props) {
             Earth: {sky.earthVisible ? 'visible' : 'below horizon'} (elev{' '}
             {deg(sky.earth.elevation)})
           </p>
+          {panel && (
+            <p className="panel-text">
+              {panel.tiltDeg === 0
+                ? 'Best fixed panel: flat (points at zenith)'
+                : `Best fixed panel: tilt ${panel.tiltDeg}° · heading ${panel.azimuthDeg}°${
+                    isTerrainCritical(site) ? ' (heading not meaningful at polar sites)' : ''
+                  }`}
+            </p>
+          )}
         </div>
       )}
       <p className="sky-caption">
