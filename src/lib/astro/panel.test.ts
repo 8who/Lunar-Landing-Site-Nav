@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { bestFixedPanel, panelNormal, sunVector } from './panel'
+import {
+  bestFixedPanel,
+  panelNormal,
+  panelNormalSky,
+  sunVector,
+  tiltArcPoints,
+} from './panel'
 import { buildTimeline } from './timeline'
 import { SITES, customSite } from './sites'
 import type { SkySample } from './types'
@@ -43,6 +49,32 @@ describe('panelNormal / sunVector', () => {
   it('points east at azimuth 90 and up at tilt 0', () => {
     expect(panelNormal(90, 90).e).toBeCloseTo(1, 12)
     expect(panelNormal(0, 123).u).toBeCloseTo(1, 12)
+  })
+})
+
+describe('panelNormalSky / tiltArcPoints', () => {
+  const dot = (a: { e: number; n: number; u: number }, b: { e: number; n: number; u: number }) =>
+    a.e * b.e + a.n * b.n + a.u * b.u
+
+  it('puts a flat panel at the zenith regardless of heading', () => {
+    expect(panelNormalSky(0, 123).elevation).toBe(90)
+  })
+
+  it('maps a tilt and heading onto sky angles', () => {
+    expect(panelNormalSky(60, 90)).toEqual({ azimuth: 90, elevation: 30 })
+  })
+
+  it('spans the tilt arc evenly from the zenith to the normal', () => {
+    const points = tiltArcPoints(40, 200, 10)
+    expect(points).toHaveLength(11)
+    expect(points[0].elevation).toBe(90)
+    expect(points[10].elevation).toBe(50)
+    for (const point of points) expect(point.azimuth).toBe(200)
+  })
+
+  it('agrees with the panel normal vector', () => {
+    const n = panelNormalSky(35, 140)
+    expect(dot(sunVector(n.azimuth, n.elevation), panelNormal(35, 140))).toBeCloseTo(1, 10)
   })
 })
 

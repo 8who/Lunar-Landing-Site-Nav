@@ -31,6 +31,33 @@ export function panelNormal(tiltDeg: number, azimuthDeg: number): PanelVector {
   }
 }
 
+export interface SkyAngles {
+  azimuth: number
+  elevation: number
+}
+
+/**
+ * Sky position of the panel normal. A panel tilted `tiltDeg` from horizontal
+ * has its normal at elevation 90 - tilt, towards the panel heading.
+ */
+export function panelNormalSky(tiltDeg: number, azimuthDeg: number): SkyAngles {
+  return { azimuth: tiltDeg === 0 ? 0 : azimuthDeg, elevation: 90 - tiltDeg }
+}
+
+/**
+ * Points along the vertical great circle at `azimuthDeg`, from the zenith down
+ * to the panel normal, evenly spaced in elevation. A flat panel is the zenith.
+ */
+export function tiltArcPoints(tiltDeg: number, azimuthDeg: number, steps = 24): SkyAngles[] {
+  if (tiltDeg === 0) return [{ azimuth: 0, elevation: 90 }]
+  const count = Math.max(1, Math.floor(steps))
+  const points: SkyAngles[] = []
+  for (let i = 0; i <= count; i++) {
+    points.push({ azimuth: azimuthDeg, elevation: 90 - (tiltDeg * i) / count })
+  }
+  return points
+}
+
 /** Unit vector towards the Sun for a compass azimuth and elevation. */
 export function sunVector(azimuthDeg: number, elevationDeg: number): PanelVector {
   const elevation = elevationDeg * DEG
