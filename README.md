@@ -39,8 +39,7 @@ npm run build    # static build in dist/
 - **Metrics**: % sunlight, % direct-to-Earth, % with both, longest continuous
   window, mean/max Sun height, solar power proxy, next sunset and next Earthset.
 
-Not yet: terrain horizon masks (LOLA), multi-site side-by-side comparison,
-export.
+Not yet: terrain horizon masks (LOLA), multi-site side-by-side comparison. Mission briefing export is available in Explorer.
 
 ## Model
 
@@ -92,3 +91,31 @@ src/App.tsx        screen composition
   values rounded from public maps (good to a few km, not to be quoted as precise).
 - Next: LOLA topography for horizon masks (Quickmap / Moon Trek), which is what
   turns "flat horizon" percentages into real illumination numbers at the poles.
+
+## Mission-window planner
+
+In Explorer, select a named site or click the globe, select a UTC date, then choose
+1–72 hours under **Find a working window**. The planner searches from the current
+playhead to the end of the displayed 30-day cycle for continuous simultaneous
+sunlight and direct Earth visibility. Jump to the earliest matching operation or
+download a text mission brief. Starts round up to the next selectable UTC minute.
+An open-ended overlap is clipped to the search end; no visibility beyond that end
+is assumed. An empty result means no match in this range, not that the site is
+universally unsuitable.
+
+### 48-hour build review
+
+Keep the astronomy module and its JPL regression fixtures, Explorer/Expert split,
+Moon/sky visualizations, curated sites, ranking, and the existing visual language.
+The tested geometry and fast visual explanation form a strong demo foundation.
+
+This branch adds named site selection, an actionable continuous-operation search,
+and downloadable briefings. It also fixes window searches skipping the final
+partial sampling interval and adds regression coverage.
+
+Next priorities: move multi-site ranking off the main thread; add scenario/date-slip
+comparison and shareable URLs; surface coordinate provenance consistently. Terrain
+horizon masks would be a major scientific improvement, but need real elevation data
+and validation. Flat-horizon sunlight must not be presented as terrain-aware polar
+illumination or a landing safety verdict. Add a WebGL fallback for devices that
+cannot render the globe and sky. Split Three.js views to reduce initial bundle size.

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import MissionPlanner from '../components/MissionPlanner'
 import MoonGlobe from '../components/MoonGlobe'
 import SkyView from '../components/SkyView'
 import { buildTimeline } from '../lib/astro/timeline'
@@ -199,6 +200,18 @@ export default function ExplorerMode({
 
   return (
     <div className="explorer">
+      <section className="controls explorer-site-picker">
+        <label className="field">Landing site
+          <select value={SITES.some(s => s.id === site.id) ? site.id : 'custom'} onChange={e => {
+            const selected = SITES.find(s => s.id === e.target.value)
+            if (selected) onSiteChange(selected)
+          }}>
+            {!SITES.some(s => s.id === site.id) && <option value="custom">Custom point</option>}
+            {SITES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </label>
+        <p>Choose a mission site, or click the Moon to explore any location. Drag to rotate.</p>
+      </section>
       <section className="chart-card explorer-hero">
         <MoonGlobe
           sites={SITES}
@@ -274,6 +287,9 @@ export default function ExplorerMode({
           <SkyView site={site} t={t} />
         </section>
       </aside>
+
+      <MissionPlanner site={site} windows={cycle.jointWindows} now={t} end={windowEnd}
+        onJump={next => { setPlaying(false); commitInstant(next, onDayChange, onMinutesChange) }} />
 
       <section className="controls explorer-controls">
         <div className="field">

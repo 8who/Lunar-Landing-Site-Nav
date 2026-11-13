@@ -1628,3 +1628,18 @@ button {
   font-size: 0.82rem;
   line-height: 1.4;
 }
+/* Surface operation planner */
+.explorer { grid-template-areas: "sites sites" "hero side" "controls controls" "mission mission"; }
+.explorer-site-picker { grid-area: sites; }
+.explorer-site-picker p { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.mission-planner { grid-area: mission; }
+.mission-planner > p, .mission-result p { color: var(--muted); font-size: 13px; line-height: 1.7; }
+.mission-eyebrow { color: var(--earth); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; margin: 0 0 8px; }
+.mission-result { display: grid; gap: 8px; margin: 20px 0; padding: 20px; border: 1px solid var(--border); border-left: 3px solid var(--earth); border-radius: 12px; background: rgba(92,200,255,.04); }
+.mission-result strong { font-size: clamp(18px, 2.5vw, 26px); }
+.mission-result p { margin: 0; }
+.mission-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.mission-actions button:first-child { color: var(--earth); }
+.mission-actions button:disabled { opacity: .4; cursor: not-allowed; }
+.mission-assumption { margin-bottom: 0; }
+@media (max-width: 900px) { .explorer { grid-template-areas: "sites" "hero" "side" "controls" "mission"; } }

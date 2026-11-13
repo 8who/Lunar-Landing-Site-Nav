@@ -63,7 +63,8 @@ export function findWindows(
   let prevT = t0
   let prevOn = isOn(t0)
 
-  for (let t = t0 + step; t <= t1; t += step) {
+  for (let probe = t0 + step; prevT < t1; probe += step) {
+    const t = Math.min(probe, t1)
     const on = isOn(t)
     if (on !== prevOn) {
       const crossing = refine(prevT, t, prevOn)
