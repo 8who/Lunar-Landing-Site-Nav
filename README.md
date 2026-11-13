@@ -54,6 +54,8 @@ export.
 | Power | Visible-disc fraction × incidence × (1 AU / r)², for a **vertical Sun-tracking array** (cos e, polar-lander practice) and a flat panel (sin e). A flat panel at the pole gets ~1% of the solar constant; a vertical one ~50% |
 | Fixed panel | Score = integral of max(0, normal · Sun) over the range, relative to a perfect two-axis Sun-tracking panel; searched on a 1° tilt × 10° azimuth grid |
 | Polar caveat | Sites at \|lat\| ≥ 80° are flagged: there the flat-horizon numbers are a first guess, terrain dominates |
+| Mast | Configurable array/antenna height h (0–20 m): the horizon drops by acos(R/(R+h)) (0.19° at 10 m), applied to sunlight, Earth visibility, power, the fixed-panel search and the ranking |
+| Array pointing | Tilt (90° − Sun elevation), 16-point heading and the azimuth turn rate a Sun-tracking array needs (~0.5°/h); average W/m² for tracking, best fixed and flat panels |
 | Windows | Boolean scan + bisection refinement of every horizon crossing (~1 s) |
 
 Earth's direction from the Moon is simply `-r_moon` rotated into the body-fixed

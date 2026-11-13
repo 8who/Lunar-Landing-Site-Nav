@@ -5,7 +5,7 @@
  * used by SkyDirection (azimuth 0 = north, 90 = east).
  */
 
-import { discFractionAbove } from './observer'
+import { discFractionAbove, type SiteObserver } from './observer'
 import type { SkySample } from './types'
 
 export interface PanelVector {
@@ -103,7 +103,9 @@ export function bestFixedPanel(samples: SkySample[]): {
     // Same limb criterion as timeline: the Sun counts while any part of its
     // disc is above the flat horizon, and a partial disc contributes pro rata.
     const rSun = (a.sun.angularDiameterDeg + b.sun.angularDiameterDeg) / 4
-    const visible = discFractionAbove(midElevation, rSun)
+    // A mast lowers the horizon: the Sun is visible down to -dip.
+    const dip = a.horizonDipDeg ?? 0
+    const visible = discFractionAbove(midElevation + dip, rSun)
     if (visible <= 0) continue
 
     // Shortest signed azimuth step, so a pair straddling north interpolates
@@ -163,5 +165,48 @@ export function bestFixedPanel(samples: SkySample[]): {
     // A flat panel has no meaningful heading.
     azimuthDeg: bestTilt === 0 ? 0 : bestAzimuth,
     capturedPct: Math.round((bestSum / sunUpMs) * 1000) / 10,
+  }
+}
+
+const COMPASS_16 = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW']
+
+/** 16-point compass label for an azimuth measured clockwise from north. */
+export function compassPoint16(azimuthDeg: number): string {
+  const a = ((azimuthDeg % 360) + 360) % 360
+  return COMPASS_16[Math.round(a / 22.5) % 16]
+}
+
+/** Signed smallest difference b - a between two azimuths, deg in (-180, 180]. */
+export function azimuthDelta(a: number, b: number): number {
+  let d = (((b - a) % 360) + 360) % 360
+  if (d > 180) d -= 360
+  return d
+}
+
+export interface TrackingPointing {
+  /** Whether any part of the Sun is up (as seen from the mast top) */
+  sunUp: boolean
+  /** Panel tilt from horizontal to face the Sun, deg (90 = vertical) */
+  tiltDeg: number
+  /** Heading the panel must face, deg from north clockwise */
+  azimuthDeg: number
+  /** Azimuth rate a Sun-tracking panel needs, deg/h (+ = clockwise) */
+  turnRateDegPerHour: number
+}
+
+/**
+ * Pointing of a Sun-tracking panel at the sample's instant. At the poles the
+ * Sun stays within ~1.5 deg of the horizon, so the panel is nearly vertical and
+ * only turns in azimuth, ~360 deg per lunar day (~0.5 deg/h).
+ */
+export function trackingPointing(observer: SiteObserver, sample: SkySample): TrackingPointing {
+  const halfHour = 1_800_000
+  const before = observer.skyAt(sample.t - halfHour).sun.azimuth
+  const after = observer.skyAt(sample.t + halfHour).sun.azimuth
+  return {
+    sunUp: sample.sunlit,
+    tiltDeg: 90 - Math.max(0, sample.sun.elevation),
+    azimuthDeg: sample.sun.azimuth,
+    turnRateDegPerHour: azimuthDelta(before, after),
   }
 }
