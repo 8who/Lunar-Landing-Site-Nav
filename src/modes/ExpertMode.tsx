@@ -35,6 +35,10 @@ const CATEGORY_LABEL: Record<string, string> = {
 // views, or coming back to the same range, is instant.
 const RANK_CACHE = new Map<string, RankedSite[]>()
 
+// The ranking is a landing-site shortlist, not a history tour: only the
+// south-pole candidate regions compete there.
+const RANK_SITES = SITES.filter((s) => s.category === 'candidate')
+
 export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: ExpertModeProps) {
   const [days, setDays] = useState(30)
   const [stepMin, setStepMin] = useState(15)
@@ -57,7 +61,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
   )
   const { metrics, samples, sunWindows, commWindows } = timeline
 
-  // Ranking evaluates every site, so only run it when that view is open.
+  // Ranking evaluates the candidate shortlist, so only run it when that view is open.
   const [rankedBase, setRankedBase] = useState<RankedSite[]>([])
   const [rankLoading, setRankLoading] = useState(false)
 
@@ -79,7 +83,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
     const frame = requestAnimationFrame(() => {
       timer = setTimeout(() => {
         if (cancelled) return
-        const rows = rankSites(SITES, t0, t1, { sortBy: 'jointPct' })
+        const rows = rankSites(RANK_SITES, t0, t1, { sortBy: 'jointPct' })
         RANK_CACHE.set(key, rows)
         setRankedBase(rows)
         setRankLoading(false)
@@ -409,14 +413,15 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
             <div>
               <h2>Site ranking — {days === 30 ? '1 lunar day' : `${days} days`}</h2>
               <p>
-                {SITES.length} curated sites · {formatUtc(t0)} → {formatUtc(t1)} · 1 h resolution
+                {RANK_SITES.length} south-pole candidates · {formatUtc(t0)} → {formatUtc(t1)} · 1 h
+                resolution
               </p>
             </div>
             <p className="rank-hint">Click a header to re-sort · click a row to open that site</p>
           </div>
           {rankLoading ? (
             <p className="rank-loading">
-              Scoring {SITES.length} sites over {days} days…
+              Scoring {RANK_SITES.length} candidates over {days} days…
             </p>
           ) : (
             <RankingTable
