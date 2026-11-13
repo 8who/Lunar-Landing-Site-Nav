@@ -40,3 +40,8 @@ export function formatCountdown(target: number | undefined, now: number): string
 
 /** value in [0,1] -> 0..100 with one decimal */
 export const pct = (v: number) => `${(v * 100).toFixed(1)}%`
+
+/** value already in percent (0..100) */
+export function formatPercent(value: number, digits = 0): string {
+  return `${value.toFixed(digits)}%`
+}

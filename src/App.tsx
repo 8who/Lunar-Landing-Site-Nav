@@ -1,6 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import TimelineChart from './components/TimelineChart'
+import RankingTable from './components/RankingTable'
 import { buildTimeline } from './lib/astro/timeline'
+import { rankSites, type RankSortKey, type RankedSite } from './lib/astro/ranking'
 import { SITES, customSite } from './lib/astro/sites'
 import type { LunarSite, SkySample } from './lib/astro/types'
 import { formatDuration, formatUtc, deg } from './lib/format'
@@ -15,6 +17,10 @@ const CATEGORY_LABEL: Record<string, string> = {
   apollo: 'Apollo',
 }
 
+// Scoring every site is expensive; keep results per date range so toggling
+// views, or coming back to the same range, is instant.
+const RANK_CACHE = new Map<string, RankedSite[]>()
+
 export default function App() {
   const [site, setSite] = useState<LunarSite>(SITES.find((s) => s.id === 'shackleton')!)
   const [startDate, setStartDate] = useState('2028-01-01')
@@ -23,6 +29,8 @@ export default function App() {
   const [hover, setHover] = useState<SkySample | null>(null)
   const [customLat, setCustomLat] = useState('-89.50')
   const [customLon, setCustomLon] = useState('0.00')
+  const [mode, setMode] = useState<'single' | 'rank'>('single')
+  const [sortBy, setSortBy] = useState<RankSortKey>('jointPct')
 
   const parsedStart = Date.parse(`${startDate}T00:00:00Z`)
   const t0 = Number.isFinite(parsedStart) ? parsedStart : Date.parse('2028-01-01T00:00:00Z')
@@ -34,6 +42,47 @@ export default function App() {
     [site.id, site.lat, site.lon, t0, t1, stepMin],
   )
   const { metrics, samples, sunWindows, commWindows } = timeline
+
+  // Ranking evaluates every site, so only run it when that view is open.
+  const [rankedBase, setRankedBase] = useState<RankedSite[]>([])
+  const [rankLoading, setRankLoading] = useState(false)
+
+  useEffect(() => {
+    if (mode !== 'rank') return
+    const key = `${t0}:${t1}`
+    const cached = RANK_CACHE.get(key)
+    if (cached) {
+      setRankedBase(cached)
+      setRankLoading(false)
+      return
+    }
+    // Scoring 22 sites blocks the main thread for a couple of seconds, so clear
+    // the table, let the "scoring" state paint, and only then start the work.
+    setRankedBase([])
+    setRankLoading(true)
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const frame = requestAnimationFrame(() => {
+      timer = setTimeout(() => {
+        if (cancelled) return
+        const rows = rankSites(SITES, t0, t1, { sortBy: 'jointPct' })
+        RANK_CACHE.set(key, rows)
+        setRankedBase(rows)
+        setRankLoading(false)
+      }, 0)
+    })
+    return () => {
+      cancelled = true
+      cancelAnimationFrame(frame)
+      if (timer) clearTimeout(timer)
+    }
+  }, [mode, t0, t1])
+
+  // Re-sorting the already computed metrics is instant; no need to re-score.
+  const ranked = useMemo(
+    () => [...rankedBase].sort((a, b) => b.metrics[sortBy] - a.metrics[sortBy]),
+    [rankedBase, sortBy],
+  )
 
   const focus = hover ?? samples[Math.floor(samples.length / 2)]
 
@@ -58,32 +107,44 @@ export default function App() {
           </div>
         </div>
         <div className="topbar-meta">
+          <div className="segmented view-toggle">
+            <button
+              className={mode === 'single' ? 'active' : ''}
+              onClick={() => setMode('single')}
+            >
+              Single site
+            </button>
+            <button className={mode === 'rank' ? 'active' : ''} onClick={() => setMode('rank')}>
+              Rank sites
+            </button>
+          </div>
           <span className="pill">NASA Space Apps Challenge 2026</span>
         </div>
       </header>
 
       <section className="controls">
-        <label className="field">
-          <span>Landing site</span>
-          <select value={site.id} onChange={(e) => {
-            if (e.target.value === '__custom') return
-            const next = SITES.find((s) => s.id === e.target.value)
-            if (next) setSite(next)
-          }}>
-            {CATEGORY_ORDER.map((cat) => (
-              <optgroup key={cat} label={CATEGORY_LABEL[cat]}>
-                {SITES.filter((s) => s.category === cat).map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </optgroup>
-            ))}
-            {site.category === 'custom' && (
-              <optgroup label="Custom">
-                <option value={site.id}>{site.name}</option>
-              </optgroup>
-            )}
-          </select>
-        </label>
+        {mode === 'single' && (
+          <label className="field">
+            <span>Landing site</span>
+            <select value={site.id} onChange={(e) => {
+              const next = SITES.find((s) => s.id === e.target.value)
+              if (next) setSite(next)
+            }}>
+              {CATEGORY_ORDER.map((cat) => (
+                <optgroup key={cat} label={CATEGORY_LABEL[cat]}>
+                  {SITES.filter((s) => s.category === cat).map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+              {site.category === 'custom' && (
+                <optgroup label="Custom">
+                  <option value={site.id}>{site.name}</option>
+                </optgroup>
+              )}
+            </select>
+          </label>
+        )}
 
         <label className="field">
           <span>Start (UTC)</span>
@@ -101,26 +162,39 @@ export default function App() {
           </div>
         </div>
 
-        <label className="field">
-          <span>Resolution</span>
-          <select value={stepMin} onChange={(e) => setStepMin(Number(e.target.value))}>
-            <option value={5}>5 min</option>
-            <option value={15}>15 min</option>
-            <option value={30}>30 min</option>
-            <option value={60}>1 hour</option>
-          </select>
-        </label>
+        {mode === 'single' && (
+          <label className="field">
+            <span>Resolution</span>
+            <select value={stepMin} onChange={(e) => setStepMin(Number(e.target.value))}>
+              <option value={5}>5 min</option>
+              <option value={15}>15 min</option>
+              <option value={30}>30 min</option>
+              <option value={60}>1 hour</option>
+            </select>
+          </label>
+        )}
 
-        <div className="field custom-site">
-          <span>Custom coordinates</span>
-          <div className="custom-row">
-            <input value={customLat} onChange={(e) => setCustomLat(e.target.value)} aria-label="Latitude" placeholder="lat" />
-            <input value={customLon} onChange={(e) => setCustomLon(e.target.value)} aria-label="Longitude" placeholder="lon" />
-            <button onClick={applyCustom}>Use</button>
+        {mode === 'single' && (
+          <div className="field custom-site">
+            <span>Custom coordinates</span>
+            <div className="custom-row">
+              <input value={customLat} onChange={(e) => setCustomLat(e.target.value)} aria-label="Latitude" placeholder="lat" />
+              <input value={customLon} onChange={(e) => setCustomLon(e.target.value)} aria-label="Longitude" placeholder="lon" />
+              <button onClick={applyCustom}>Use</button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {mode === 'rank' && (
+          <div className="field rank-note">
+            <span>Ranking</span>
+            <p>{SITES.length} curated sites · 1 h resolution</p>
+          </div>
+        )}
       </section>
 
+      {mode === 'single' ? (
+        <>
       <section className="kpis">
         <Kpi
           label="Sunlight"
@@ -201,6 +275,35 @@ export default function App() {
           onHover={setHover}
         />
       </section>
+        </>
+      ) : (
+        <section className="chart-card ranking-card">
+          <div className="chart-head">
+            <div>
+              <h2>Site ranking — {days === 30 ? '1 lunar day' : `${days} days`}</h2>
+              <p>
+                {SITES.length} curated sites · {formatUtc(t0)} → {formatUtc(t1)} · 1 h resolution
+              </p>
+            </div>
+            <p className="rank-hint">Click a header to re-sort · click a row to open that site</p>
+          </div>
+          {rankLoading ? (
+            <p className="rank-loading">
+              Scoring {SITES.length} sites over {days} days…
+            </p>
+          ) : (
+            <RankingTable
+              rows={ranked}
+              sortBy={sortBy}
+              onSort={setSortBy}
+              onSelect={(next) => {
+                setSite(next)
+                setMode('single')
+              }}
+            />
+          )}
+        </section>
+      )}
 
       <footer className="foot">
         <div>

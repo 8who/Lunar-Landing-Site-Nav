@@ -43,7 +43,10 @@ export function findWindows(
   t1: number,
   stepMs: number,
 ): TimeWindow[] {
-  const step = Math.min(stepMs, Math.max(1000, (t1 - t0) / 4000))
+  // Never scan finer than the requested step, and never much finer than the
+  // range needs (4000 probes max). Edges are bisection-refined below, so a
+  // coarse scan does not cost precision.
+  const step = Math.max(stepMs, (t1 - t0) / 4000, 1000)
   const refine = (a: number, b: number, aOn: boolean) => {
     let lo = a
     let hi = b
@@ -92,7 +95,7 @@ function firstCrossing(
   stepMs: number,
   want: boolean,
 ): number | undefined {
-  const step = Math.min(stepMs, Math.max(1000, (t1 - t0) / 2000))
+  const step = Math.max(stepMs, (t1 - t0) / 2000, 1000)
   let prev = isOn(t0)
   for (let t = t0 + step; t <= t1; t += step) {
     const on = isOn(t)
