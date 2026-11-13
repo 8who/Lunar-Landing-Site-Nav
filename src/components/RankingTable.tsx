@@ -13,6 +13,7 @@ const COLUMNS: { key: RankSortKey | null; label: string }[] = [
   { key: 'sunlitPct', label: 'Sunlight %' },
   { key: 'commPct', label: 'Earth link %' },
   { key: 'jointPct', label: 'Both %' },
+  { key: 'meanTrackingIncidence', label: 'Solar power' },
   { key: 'longestCommMs', label: 'Longest Earth link' },
   { key: null, label: 'Longest sunlight' },
 ]
@@ -69,6 +70,9 @@ export default function RankingTable({ rows, sortBy, onSort, onSelect }: Props) 
               <td className="mono sun-text">{formatPercent(row.metrics.sunlitPct)}</td>
               <td className="mono earth-text">{formatPercent(row.metrics.commPct)}</td>
               <td className="mono">{formatPercent(row.metrics.jointPct)}</td>
+              <td className="mono sun-text" title="Average for a vertical array that turns to face the Sun">
+                {Math.round(row.metrics.meanTrackingFluxWm2)} W/m²
+              </td>
               <td className="mono">{formatDuration(row.metrics.longestCommMs)}</td>
               <td className="mono muted-cell">{formatDuration(row.metrics.longestSunlitMs)}</td>
             </tr>

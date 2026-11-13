@@ -1,7 +1,12 @@
 import { buildTimeline } from './timeline'
 import type { LunarSite, TimelineMetrics } from './types'
 
-export type RankSortKey = 'jointPct' | 'sunlitPct' | 'commPct' | 'longestCommMs'
+export type RankSortKey =
+  | 'jointPct'
+  | 'sunlitPct'
+  | 'commPct'
+  | 'longestCommMs'
+  | 'meanTrackingIncidence'
 
 export interface RankedSite {
   site: LunarSite

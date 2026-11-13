@@ -40,7 +40,7 @@ export interface SkySample {
   t: number
   sun: SkyDirection
   earth: SkyDirection
-  /** Sun above the (flat) local horizon */
+  /** Some of the solar disc above the (flat) local horizon (upper limb > 0) */
   sunlit: boolean
   /** Earth above the (flat) local horizon: direct-to-Earth link possible */
   earthVisible: boolean
@@ -64,11 +64,23 @@ export interface TimelineMetrics {
   jointPct: number
   longestSunlitMs: number
   longestCommMs: number
+  /** Mean Sun elevation while the site is lit, deg (night excluded) */
   meanSunElevation: number
   /** Highest Sun elevation reached in the range, deg */
   maxSunElevation: number
-  /** Mean of max(0, sin(elev)) over the range: horizontal-array power proxy (0..1) */
+  /**
+   * Horizontal (flat, deck-mounted) array: time-mean of visible-disc fraction
+   * x sin(elev) x (1 AU / r)^2, relative to the solar constant (0..1).
+   * Near zero at the poles, which is why polar landers do not use it.
+   */
   meanSolarIncidence: number
+  /**
+   * Vertical array that rotates in azimuth to face the Sun (the polar-lander
+   * standard): visible-disc fraction x cos(elev) x (1 AU / r)^2 (0..1).
+   */
+  meanTrackingIncidence: number
+  /** meanTrackingIncidence x solar constant: average W per m^2 of panel */
+  meanTrackingFluxWm2: number
   /** First Sun set (or rise) after the range start, epoch ms */
   nextSunset?: number
   nextSunrise?: number
