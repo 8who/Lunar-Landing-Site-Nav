@@ -8,3 +8,15 @@ dist-ssr
 
 # Local OpenCode skills / session config
 .opencode/
+
+# Local agent skills, settings, research and session logs
+.agents/
+.codex/
+.claude/
+.firecrawl/
+skills-lock.json
+LOCAL_PROJECT_LOG.md
+
+# Private developer automation (including local commit/push helpers)
+.local-scripts/
+scripts/local/
