@@ -43,11 +43,11 @@ export default function App() {
 
   // Profiles are pure functions of (grid, lat, lon, mast): cache them so a
   // render, a view switch or a slider tick never recomputes an unchanged site.
-  // The mast is debounced: rebuilding 8 skyline profiles per slider tick would
-  // outrun the drag for a change of a few hundredths of a degree.
+  // Keep pointer feedback immediate, but hold the scientific model steady
+  // while the slider is moving. Rebuild the terrain horizon after a short pause.
   const [profileMast, setProfileMast] = useState(mastHeightM)
   useEffect(() => {
-    const timer = setTimeout(() => setProfileMast(mastHeightM), 200)
+    const timer = setTimeout(() => setProfileMast(mastHeightM), 140)
     return () => clearTimeout(timer)
   }, [mastHeightM])
 
@@ -74,8 +74,8 @@ export default function App() {
 
   const siteWithHorizon = useMemo(() => horizonFor(site), [horizonFor, site])
   const siteWithMast = useMemo(
-    () => ({ ...siteWithHorizon, mastHeightM }),
-    [siteWithHorizon, mastHeightM],
+    () => ({ ...siteWithHorizon, mastHeightM: profileMast }),
+    [siteWithHorizon, profileMast],
   )
 
   const t = useMemo(() => {
@@ -122,7 +122,7 @@ export default function App() {
               Expert
             </button>
           </div>
-          {mode === 'expert' && <MastControl value={mastHeightM} onChange={setMastHeightM} />}
+          {mode === 'expert' && <MastControl value={mastHeightM} appliedValue={profileMast} onChange={setMastHeightM} />}
           <span className="pill" title="Independent NASA Space Apps Challenge project; not an official NASA product">NASA Space Apps · Independent project</span>
         </div>
       </header>
@@ -147,6 +147,7 @@ export default function App() {
           day={day}
           onDayChange={setDay}
           t={t}
+          visualMastHeightM={mastHeightM}
           horizonFor={horizonFor}
           alternativeSearch={alternativeSearch}
           onAlternativeSearchChange={setAlternativeSearch}

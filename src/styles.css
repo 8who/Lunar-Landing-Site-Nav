@@ -3324,6 +3324,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
 .mast-control {
   cursor: help;
 }
+.mast-update-status { min-width: 62px; color: var(--muted); font-size: 10px; white-space: nowrap; }
 
 .mast-preview {
   position: absolute;

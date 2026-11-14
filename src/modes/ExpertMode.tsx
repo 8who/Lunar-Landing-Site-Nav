@@ -25,6 +25,8 @@ export interface ExpertModeProps {
   onDayChange: (day: string) => void
   /** Shared instant from the Explorer; used when the timeline is not hovered */
   t: number
+  /** Immediate visual mast position; scientific model updates after slider settles. */
+  visualMastHeightM: number
   /** Attach the terrain skyline to a site (no-op while the grid is loading) */
   horizonFor: (site: LunarSite) => LunarSite
   alternativeSearch: AlternativeSearch | null
@@ -55,6 +57,7 @@ export default function ExpertMode({
   day,
   onDayChange,
   t,
+  visualMastHeightM,
   horizonFor,
   alternativeSearch,
   onAlternativeSearchChange,
@@ -483,6 +486,7 @@ export default function ExpertMode({
             <SkyView
               site={site}
               t={skyTime}
+              visualMastHeightM={visualMastHeightM}
               panel={
                 bestPanel && bestPanel.capturedPct > 0
                   ? { tiltDeg: bestPanel.tiltDeg, azimuthDeg: bestPanel.azimuthDeg }

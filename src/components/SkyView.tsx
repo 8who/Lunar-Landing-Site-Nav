@@ -26,6 +26,8 @@ interface Props {
   site: LunarSite
   /** UTC epoch ms */
   t: number
+  /** Live visual mast position, independent of the committed science model. */
+  visualMastHeightM?: number
   /** Best fixed panel to mark on the sky, or null to hide it. */
   panel?: { tiltDeg: number; azimuthDeg: number } | null
 }
@@ -220,7 +222,7 @@ function makeStars(): THREE.Points {
   return new THREE.Points(geometry, material)
 }
 
-export default function SkyView({ site, t, panel }: Props) {
+export default function SkyView({ site, t, panel, visualMastHeightM = site.mastHeightM ?? 0 }: Props) {
   const controlsRef = useRef<(action: 'in' | 'out' | 'reset' | 'sun' | 'earth' | 'terrain') => void>(() => {})
   const [terrainStatus, setTerrainStatus] = useState('Loading NASA terrain…')
   const [seeThrough, setSeeThrough] = useState(false)
@@ -230,6 +232,9 @@ export default function SkyView({ site, t, panel }: Props) {
     (sample: SkySample, viewSite: LunarSite, axes: EarthAxes, dsn: DsnStatus[]) => void
   >(() => {})
   const updatePanelRef = useRef<(panel: Props['panel']) => void>(() => {})
+  const moveTerrainRef = useRef<(mastHeightM: number) => void>(() => {})
+  const visualMastRef = useRef(visualMastHeightM)
+  visualMastRef.current = visualMastHeightM
   // The scene effect runs once, so it reads the latest prop through this ref.
   const latestPanelRef = useRef<Props['panel']>(panel ?? null)
   latestPanelRef.current = panel ?? null
@@ -451,7 +456,7 @@ export default function SkyView({ site, t, panel }: Props) {
         if (terrainDisposed) return
         if (!grid) throw new Error('Elevation unavailable')
         terrain = createLunarTerrain(grid, site, terrainMap)
-        terrain.position.y = -((latestViewSite.mastHeightM ?? 0) - (site.mastHeightM ?? 0)) / 10_000
+        terrain.position.y = -((visualMastRef.current) - (site.mastHeightM ?? 0)) / 10_000
         applySkylineMask(terrain.material, skylineMask, true)
         terrain.material.opacity = groundMaterial.opacity
         terrain.material.depthWrite = groundMaterial.depthWrite
@@ -601,6 +606,10 @@ export default function SkyView({ site, t, panel }: Props) {
       dirty = true
       renderFrame()
     }
+    moveTerrainRef.current = mastHeightM => {
+      if (terrain) terrain.position.y = -(mastHeightM - (site.mastHeightM ?? 0)) / 10_000
+      dirty = true
+    }
 
     // Textures arrive asynchronously; redraw once they do.
     THREE.DefaultLoadingManager.onLoad = () => {
@@ -712,6 +721,7 @@ export default function SkyView({ site, t, panel }: Props) {
       host.removeEventListener('wheel', onWheel)
       THREE.DefaultLoadingManager.onLoad = () => {}
       updateRef.current = () => {}
+      moveTerrainRef.current = () => {}
       updatePanelRef.current = () => {}
       scene.traverse((object) => {
         // Sprite geometries are shared by every Sprite in the module: never dispose them.
@@ -734,6 +744,12 @@ export default function SkyView({ site, t, panel }: Props) {
       if (renderer.domElement.parentNode === host) host.removeChild(renderer.domElement)
     }
   }, [site.lat, site.lon])
+
+  // Move the existing terrain mesh during slider input. This does not rebuild
+  // the scene, observer, DSN solution, or the science horizon profile.
+  useEffect(() => {
+    moveTerrainRef.current(visualMastHeightM)
+  }, [visualMastHeightM])
 
   // Layout effect and immediate draw: the canvas and readouts use the same
   // committed UTC instant, without a passive-effect/render-frame delay.
