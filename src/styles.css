@@ -3881,3 +3881,4 @@ small, .site-cell small, .opp-result-site small { font-size: max(12px, .83em); }
 .hover-strip, .hover-strip span { font-size: 12.5px; }
 @media (max-width: 600px) {
   .sky-overlay, .sky-caption, .dsn-list, .dsn-row, .sky-controls button { font-size: 15px; }
+}
