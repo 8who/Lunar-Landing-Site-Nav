@@ -3691,6 +3691,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
 .sky-pov-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
 .sky-pov-head p { margin: 4px 0 0; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
 .sky-pov-head .sky-pov-hint { margin: 0; font-size: 13px; }
+.sky-pov-actions { display: flex; align-items: center; gap: 14px; }
 .sky-controls .sky-full-toggle { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; white-space: nowrap; }
 .sky-full-toggle svg { flex: none; }
 .sky-pov.is-full { overflow-y: auto; overscroll-behavior: contain; }

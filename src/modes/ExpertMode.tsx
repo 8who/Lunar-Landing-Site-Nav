@@ -658,6 +658,7 @@ const skyTime = hover?.t ?? pinned?.t ?? playhead
               site={site}
               t={skyTime}
               visualMastHeightM={visualMastHeightM}
+              playback={{ playing, onToggle: togglePlay }}
               panel={
                 bestPanel && bestPanel.capturedPct > 0
                   ? { tiltDeg: bestPanel.tiltDeg, azimuthDeg: bestPanel.azimuthDeg }

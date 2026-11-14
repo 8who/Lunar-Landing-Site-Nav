@@ -325,7 +325,7 @@ export default function ExplorerMode({
               </p>
             </div>
           </div>
-          <SkyView site={site} t={t} />
+          <SkyView site={site} t={t} playback={{ playing, onToggle: () => setPlaying((value) => !value) }} />
         </section>
       </aside>
 

@@ -30,6 +30,8 @@ interface Props {
   visualMastHeightM?: number
   /** Best fixed panel to mark on the sky, or null to hide it. */
   panel?: { tiltDeg: number; azimuthDeg: number } | null
+  /** Time playback owned by the mode; shown in full screen, where the scrubber is out of view. */
+  playback?: { playing: boolean; onToggle: () => void }
 }
 
 const RAD = Math.PI / 180
@@ -226,7 +228,7 @@ function makeStars(): THREE.Points {
   return new THREE.Points(geometry, material)
 }
 
-export default function SkyView({ site, t, panel, visualMastHeightM = site.mastHeightM ?? 0 }: Props) {
+export default function SkyView({ site, t, panel, playback, visualMastHeightM = site.mastHeightM ?? 0 }: Props) {
   const controlsRef = useRef<(action: 'in' | 'out' | 'reset' | 'sun' | 'earth' | 'terrain') => void>(() => {})
   const [terrainStatus, setTerrainStatus] = useState('Loading NASA terrain…')
   const [seeThrough, setSeeThrough] = useState(false)
@@ -864,7 +866,28 @@ export default function SkyView({ site, t, panel, visualMastHeightM = site.mastH
               {site.name} · {formatUtc(t, { seconds: true })}
             </p>
           </div>
-          <p className="sky-pov-hint">Esc to exit full screen</p>
+          <div className="sky-pov-actions">
+            {playback && (
+              <button
+                className={`scrub-play${playback.playing ? ' is-playing' : ''}`}
+                onClick={playback.onToggle}
+                aria-pressed={playback.playing}
+              >
+                {playback.playing ? (
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <rect x="3.6" y="3" width="3.2" height="10" rx="1.1" />
+                    <rect x="9.2" y="3" width="3.2" height="10" rx="1.1" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M4.9 2.9 12.8 8l-7.9 5.1Z" />
+                  </svg>
+                )}
+                <span>{playback.playing ? 'Pause' : 'Play'}</span>
+              </button>
+            )}
+            <p className="sky-pov-hint">Esc to exit full screen</p>
+          </div>
         </div>
       )}
       <div className="sky-view">
