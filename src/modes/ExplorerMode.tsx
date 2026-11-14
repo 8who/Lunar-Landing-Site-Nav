@@ -213,6 +213,14 @@ export default function ExplorerMode({
 
   return (
     <div className="explorer">
+      <section className="atlas-intro" aria-labelledby="atlas-title">
+        <div>
+          <p className="atlas-kicker">LUNAR SURFACE OPERATIONS <span>·</span> EXPLORER</p>
+          <h2 id="atlas-title">Find the light.<br /><em>Keep Earth in view.</em></h2>
+          <p className="atlas-deck">Compare landing sites against the lunar horizon, sunlight and direct-to-Earth visibility.</p>
+        </div>
+        <p className="atlas-index"><span>01</span> SITE CONDITIONS<br /><span>02</span> MISSION WINDOW</p>
+      </section>
       <section className="controls explorer-site-picker">
         <label className="field">Landing site
           <select value={SITES.some(s => s.id === site.id) ? site.id : 'custom'} onChange={e => {

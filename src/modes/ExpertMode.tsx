@@ -166,6 +166,14 @@ export default function ExpertMode({
 
   return (
     <>
+      <section className="atlas-intro expert-intro" aria-labelledby="analysis-title">
+        <div>
+          <p className="atlas-kicker">LUNAR SURFACE OPERATIONS <span>·</span> ANALYSIS</p>
+          <h2 id="analysis-title">Compare the conditions.<br /><em>Choose the window.</em></h2>
+          <p className="atlas-deck">A shared site and UTC time drive every timeline, score and visibility result below.</p>
+        </div>
+        <p className="atlas-index"><span>01</span> SITE CONDITIONS<br /><span>02</span> MISSION WINDOW</p>
+      </section>
       <section className="controls">
         <div className="field">
           <span>View</span>
