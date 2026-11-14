@@ -448,7 +448,7 @@ const skyTime = hover?.t ?? pinned?.t ?? playhead
             These flux KPIs show incident sunlight in W/m², without electrical conversion, storage or load modeling.
           </p>
 
-          <MissionAssessmentPanel site={site} t0={t0} t1={t1} horizonFor={horizonFor} />
+          <MissionAssessmentPanel site={site} t0={t0} t1={t1} />
 
           <section className="chart-card panel-card">
             <div className="chart-head">

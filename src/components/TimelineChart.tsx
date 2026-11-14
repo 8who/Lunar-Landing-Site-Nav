@@ -38,6 +38,7 @@ export default function TimelineChart({
   active,
 }: Props) {
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const touchStartX = useRef<number | null>(null)
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
 
   const t0 = samples[0]?.t ?? 0
@@ -177,6 +178,7 @@ export default function TimelineChart({
 
   return (
     <div className="chart-wrap">
+      <p className="chart-mobile-hint">Swipe horizontally to see the full timeline. Tap the graph to select a time.</p>
       <svg
         ref={svgRef}
         className="chart"
@@ -184,8 +186,13 @@ export default function TimelineChart({
         onMouseMove={(e) => pick(e.clientX)}
         onMouseLeave={clear}
         onClick={(e) => commit(e.clientX)}
-        onTouchMove={(e) => pick(e.touches[0].clientX)}
-        onTouchEnd={(e) => commit(e.changedTouches[0].clientX)}
+        onTouchStart={(e) => { touchStartX.current = e.touches[0]?.clientX ?? null }}
+        onTouchEnd={(e) => {
+          const end = e.changedTouches[0]?.clientX
+          if (end !== undefined && touchStartX.current !== null && Math.abs(end - touchStartX.current) < 8) commit(end)
+          touchStartX.current = null
+        }}
+        onTouchCancel={() => { touchStartX.current = null }}
       >
         <defs>
           <linearGradient id="sunFill" x1="0" y1="0" x2="0" y2="1">

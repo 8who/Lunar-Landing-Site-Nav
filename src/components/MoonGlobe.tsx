@@ -452,15 +452,15 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
 
     const raycaster = new THREE.Raycaster()
     const pointer = new THREE.Vector2()
-    const markerAt = (clientX: number, clientY: number) => {
+    const markerAt = (clientX: number, clientY: number, hitRadius = 10) => {
       scene.updateMatrixWorld(true)
       camera.updateMatrixWorld()
-      return markerAtPointer(visibleSites, camera, globe.matrixWorld, host.getBoundingClientRect(), clientX, clientY)
+      return markerAtPointer(visibleSites, camera, globe.matrixWorld, host.getBoundingClientRect(), clientX, clientY, hitRadius)
     }
-    const pickAt = (clientX: number, clientY: number) => {
+    const pickAt = (clientX: number, clientY: number, hitRadius = 10) => {
       const rect = host.getBoundingClientRect()
       if (rect.width === 0 || rect.height === 0) return
-      const marker = markerAt(clientX, clientY)
+      const marker = markerAt(clientX, clientY, hitRadius)
       if (marker) {
         setShowAll(false)
         setHover(null)
@@ -487,7 +487,35 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
     let moved = 0
     let lastX = 0
     let lastY = 0
+    let startX = 0
+    let startY = 0
+    let dragStarted = false
+    let pinchDistance = 0
+    const touchDistance = (touches: TouchList) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY)
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 2 || (event.target as Element).closest('.globe-site-controls')) return
+      pinchDistance = touchDistance(event.touches)
+      dragging = false
+      moved = CLICK_SLOP_PX
+      host.classList.remove('dragging')
+      event.preventDefault()
+    }
+    const onTouchMove = (event: TouchEvent) => {
+      if (event.touches.length !== 2 || !pinchDistance) return
+      const next = touchDistance(event.touches)
+      if (next > 0) camera.position.z = Math.max(1.35, Math.min(5.5, camera.position.z * pinchDistance / next))
+      pinchDistance = next
+      camera.updateProjectionMatrix()
+      dirty = true
+      event.preventDefault()
+    }
+    const onTouchEnd = (event: TouchEvent) => { if (event.touches.length < 2) pinchDistance = 0 }
+    host.addEventListener('touchstart', onTouchStart, { passive: false })
+    host.addEventListener('touchmove', onTouchMove, { passive: false })
+    host.addEventListener('touchend', onTouchEnd)
+    host.addEventListener('touchcancel', onTouchEnd)
     const onPointerDown = (event: PointerEvent) => {
+      if (pinchDistance) return
       if ((event.target as Element).closest('.globe-site-controls')) return
       setHover(null)
       host.style.cursor = ''
@@ -497,6 +525,9 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
       moved = 0
       lastX = event.clientX
       lastY = event.clientY
+      startX = event.clientX
+      startY = event.clientY
+      dragStarted = false
       try {
         host.setPointerCapture(event.pointerId)
       } catch {
@@ -505,6 +536,7 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
       host.classList.add('dragging')
     }
     const onPointerMove = (event: PointerEvent) => {
+      if (pinchDistance) return
       if (!dragging) {
         const hit = (event.target as Element).closest('.globe-site-controls') ? null : markerAt(event.clientX, event.clientY)
         setHover((previous) => hit && previous?.site.id === hit.site.id && previous.x === hit.x && previous.y === hit.y ? previous : hit)
@@ -513,7 +545,10 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
       }
       const dx = event.clientX - lastX
       const dy = event.clientY - lastY
-      moved += Math.abs(dx) + Math.abs(dy)
+      moved = Math.hypot(event.clientX - startX, event.clientY - startY)
+      const slop = event.pointerType === 'touch' ? 12 : CLICK_SLOP_PX
+      if (!dragStarted && moved < slop) return
+      dragStarted = true
       yaw.current -= dx * DRAG_RAD_PER_PX
       pitch.current = Math.min(PITCH_LIMIT, Math.max(-PITCH_LIMIT, pitch.current - dy * DRAG_RAD_PER_PX))
       lastX = event.clientX
@@ -525,7 +560,8 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
       dragging = false
       host.classList.remove('dragging')
       if (host.hasPointerCapture(event.pointerId)) host.releasePointerCapture(event.pointerId)
-      if (moved < CLICK_SLOP_PX) pickAt(event.clientX, event.clientY)
+      const slop = event.pointerType === 'touch' ? 12 : CLICK_SLOP_PX
+      if (!dragStarted && moved < slop) pickAt(event.clientX, event.clientY, event.pointerType === 'touch' ? 24 : 10)
     }
     const clearHover = () => { setHover(null); host.style.cursor = '' }
     const onPointerCancel = () => { dragging = false; host.classList.remove('dragging'); clearHover() }
@@ -588,6 +624,10 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
       cancelAnimationFrame(raf)
       observer.disconnect()
       host.removeEventListener('pointerdown', onPointerDown)
+      host.removeEventListener('touchstart', onTouchStart)
+      host.removeEventListener('touchmove', onTouchMove)
+      host.removeEventListener('touchend', onTouchEnd)
+      host.removeEventListener('touchcancel', onTouchEnd)
       host.removeEventListener('pointermove', onPointerMove)
       host.removeEventListener('pointerup', onPointerUp)
       host.removeEventListener('pointercancel', onPointerCancel)
@@ -687,7 +727,8 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
         continue
       }
       const canvas = document.createElement('canvas')
-      paintCap(canvas, pole, cap, layer, tempBucket)
+      const mobile = window.matchMedia('(max-width: 600px), (pointer: coarse)').matches
+      paintCap(canvas, pole, cap, layer, tempBucket, mobile ? 384 : 1024)
       capRef.current(pole, canvas)
     }
   }, [layer, caps, layer === 'temperature' ? tempBucket : 0])

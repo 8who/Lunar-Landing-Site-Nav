@@ -262,31 +262,20 @@ public/
   elevation are used.
 - The sky view exaggerates angular sizes ×3 (minimum 0.5°) so the Sun and Earth
   stay visible at a 70° field of view; the caption says so.
-- Expert mission assessment compares up to three sites under identical requirements, with stored-energy charts and timeline exports.
+- Expert generates a concise DSN geometric-availability check from the selected site and mission interval; users set only the maximum acceptable outage.
 - Ranking samples at 1 h — it is a shortlist, not a final analysis.
 - Earth geometric windows use any visible portion of Earth's disc above the skyline. They do not establish station access. The separate assessment tests individual DSN station directions and a configurable geometric station elevation mask.
 - Assessment JSON and CSV exports include requirements, UTC sample times and model assumptions. Explorer's legacy printable briefing panel has been removed.
 - A mission-window search that finds nothing means "no match in this range", not
   that the site is unusable.
 
-## Mission assessment workflow
+## Mission communications check
 
-Expert's single-site view now includes an explicit requirements assessment. Enter constant demand (W), array area (m²), conversion efficiency, usable battery capacity (Wh), initial charge, charging/discharging efficiencies, orientation, station elevation mask and maximum acceptable DSN geometric blackout. Defaults are illustrative planning inputs, not a NASA mission specification. Press **Assess mission & compare**; edits invalidate the prior assessment instead of silently displaying stale results.
+Expert automatically evaluates geometric DSN access for the currently selected site and date range. Set one requirement: the maximum acceptable blackout (6, 12, 24 or 48 hours). The result reports the share of sampled time when at least one of the three modeled DSN complexes sees the site above the 10° station mask and the terrain skyline, plus the longest continuous modeled outage and whether it exceeds the chosen limit. It updates when the site, date range or limit changes.
 
-| Output | Meaning | Exclusions |
-| --- | --- | --- |
-| Earth geometric visibility | Any portion of Earth's disc clears the shared lunar skyline | Individual antennas and RF performance |
-| DSN geometric access | At least one modeled station clears the lunar skyline and its geometric station elevation mask | Scheduling, maintenance, frequency compatibility, antenna pointing constraints, RF link budgets, relays |
-| Incident flux (W/m²) | Sun distance, visible fraction and array incidence | Electrical conversion and delivered energy |
-| Generated electrical power (W) | Incident flux × area × specified efficiency | Degradation and thermal operating limits |
-| Stored energy / unmet load | Time integration with storage capacity and charge/discharge losses | Battery power limits, self-discharge, voltage and thermal behavior |
-| Resource score | User-weighted regional abundance and visibility screening | Local ore density, accessibility, extraction and reserves |
+This is a screening result for a short presentation, not a guaranteed or scheduled radio link. It excludes station schedules, maintenance, RF link budgets, relay coverage and brief events between five-minute samples. The separate sky view shows station geometry for the selected instant.
 
-The assessment holds geometry and generation constant over each five-minute midpoint interval. Solar generation serves demand first; surplus charges storage and deficits discharge it. Excess above capacity is discarded. It reports energy shortfall, time with unmet load, minimum battery energy, generation below demand and longest DSN geometric blackout. A passing verdict applies only to the entered electrical and blackout requirements; it is not mission certification. CSV sample battery energy belongs to the interval end, while its timestamp marks the geometry midpoint.
-
-Choose up to two other south-pole candidates for the same assessment. JSON includes the complete result, original inputs, source metadata and sampled timeline. CSV repeats assumptions and inputs for standalone interpretation. Nearby-position assessment rebuilds four terrain skylines at a user-selected great-circle offset. A changed verdict flags sensitivity; these offsets are scenarios, not statistically established coordinate confidence intervals. Unchanged results do not prove local stability below the terrain grid's resolving power.
-
-**Find windows** keeps its three-hour calendar as a coarse screen, then refines the earliest shortlisted candidate per site (or closest failures) at five-minute cadence. Refined rows show binding percentage constraint, margin and longest darkness/Earth geometric outage. This does not exhaust all dates or automatically evaluate battery/DSN requirements for every calendar cell; use the requirements assessment for the chosen interval. Fine cadence does not improve terrain resolution and can miss events between samples.
+**Find windows** keeps its three-hour calendar as a coarse screen, then refines the earliest shortlisted candidate per site (or closest failures) at five-minute cadence. Refined rows show binding percentage constraint, margin and longest darkness/Earth geometric outage. It does not exhaust all dates. Fine cadence does not improve terrain resolution and can miss events between samples.
 
 Resources shows an angular-coordinate map of the original measurement bin and site marker, without interpolating abundance. The table retains the underlying sunlight, Earth geometry and abundance tradeoffs beside the weighted score. Fine mineral species coverage and regional source resolution caveats remain applicable.
 

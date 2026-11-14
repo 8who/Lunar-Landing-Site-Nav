@@ -5,7 +5,7 @@ import type { LunarSite } from '../lib/astro/types'
 /** Screen-space picking keeps the hit target consistent at every zoom level.
  * Sphere occlusion rejects points on the far side, even when projections overlap.
  */
-export function markerAtPointer(sites: LunarSite[], camera: THREE.PerspectiveCamera, globeMatrix: THREE.Matrix4, rect: { left: number; top: number; width: number; height: number }, clientX: number, clientY: number) {
+export function markerAtPointer(sites: LunarSite[], camera: THREE.PerspectiveCamera, globeMatrix: THREE.Matrix4, rect: { left: number; top: number; width: number; height: number }, clientX: number, clientY: number, hitRadius = 10) {
   if (rect.width <= 0 || rect.height <= 0) return null
   const origin = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld)
   const centre = new THREE.Vector3().setFromMatrixPosition(globeMatrix)
@@ -22,7 +22,7 @@ export function markerAtPointer(sites: LunarSite[], camera: THREE.PerspectiveCam
     const x = (projected.x + 1) / 2 * rect.width
     const y = (1 - projected.y) / 2 * rect.height
     const distance = Math.hypot(clientX - rect.left - x, clientY - rect.top - y)
-    if (distance <= 10 && (!best || distance < best.distance)) best = { site, x, y, distance }
+    if (distance <= hitRadius && (!best || distance < best.distance)) best = { site, x, y, distance }
   }
   return best
 }

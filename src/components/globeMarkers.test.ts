@@ -28,6 +28,12 @@ describe('named lunar marker selection', () => {
       expect(markerAtPointer([front], camera, matrix, rect, 261, 280)).toBeNull()
     }
   })
+  it('uses an expanded touch target without selecting the far side or distant terrain', () => {
+    const camera = cameraAt(3.1)
+    expect(markerAtPointer([back, front], camera, matrix, rect, 272, 280, 24)?.site).toBe(front)
+    expect(markerAtPointer([back], camera, matrix, rect, 250, 280, 24)).toBeNull()
+    expect(markerAtPointer([front], camera, matrix, rect, 275, 280, 24)).toBeNull()
+  })
   it('chooses the nearest projected site in a close cluster', () => {
     const other = customSite(2, 0, 'Nearby marker')
     const camera = cameraAt(3.1)

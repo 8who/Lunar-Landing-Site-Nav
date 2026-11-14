@@ -663,7 +663,29 @@ export default function SkyView({ site, t, panel, visualMastHeightM = site.mastH
     let dragging = false
     let lastX = 0
     let lastY = 0
+    let pinchDistance = 0
+    const touchDistance = (touches: TouchList) => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY)
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 2) return
+      pinchDistance = touchDistance(event.touches)
+      dragging = false
+      host.classList.remove('dragging')
+      event.preventDefault()
+    }
+    const onTouchMove = (event: TouchEvent) => {
+      if (event.touches.length !== 2 || !pinchDistance) return
+      const next = touchDistance(event.touches)
+      if (next > 0) zoom(camera.fov * pinchDistance / next)
+      pinchDistance = next
+      event.preventDefault()
+    }
+    const onTouchEnd = (event: TouchEvent) => { if (event.touches.length < 2) pinchDistance = 0 }
+    host.addEventListener('touchstart', onTouchStart, { passive: false })
+    host.addEventListener('touchmove', onTouchMove, { passive: false })
+    host.addEventListener('touchend', onTouchEnd)
+    host.addEventListener('touchcancel', onTouchEnd)
     const onPointerDown = (event: PointerEvent) => {
+      if (pinchDistance) return
       dragging = true
       lastX = event.clientX
       lastY = event.clientY
@@ -675,6 +697,7 @@ export default function SkyView({ site, t, panel, visualMastHeightM = site.mastH
       host.classList.add('dragging')
     }
     const onPointerMove = (event: PointerEvent) => {
+      if (pinchDistance) return
       if (!dragging) return
       follow = null
       setTracking(null)
@@ -715,6 +738,10 @@ export default function SkyView({ site, t, panel, visualMastHeightM = site.mastH
       cancelAnimationFrame(raf)
       observer.disconnect()
       host.removeEventListener('pointerdown', onPointerDown)
+      host.removeEventListener('touchstart', onTouchStart)
+      host.removeEventListener('touchmove', onTouchMove)
+      host.removeEventListener('touchend', onTouchEnd)
+      host.removeEventListener('touchcancel', onTouchEnd)
       host.removeEventListener('pointermove', onPointerMove)
       host.removeEventListener('pointerup', onPointerUp)
       host.removeEventListener('pointercancel', onPointerUp)

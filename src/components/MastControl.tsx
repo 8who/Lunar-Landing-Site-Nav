@@ -49,6 +49,10 @@ export default function MastControl({
     <div className="mast-control-wrap">
       <label className="mast-control">
         <span>Mast</span>
+        <svg className="mast-mobile-icon" viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M4 28h24M16 28V5M9 8h14M11 5v6M21 5v6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          <circle cx="16" cy="5" r="2" fill="currentColor" />
+        </svg>
         <input
           type="range"
           min={0}
@@ -72,6 +76,10 @@ export default function MastControl({
         <span className="mono">{draft} m</span>
         <span className="mast-update-status" aria-live="polite">{dragging ? 'Release to apply' : updating ? 'Updating model…' : ''}</span>
       </label>
+      <div className="mast-mobile-steps" aria-label="Adjust mast height">
+        <button type="button" aria-label="Lower mast by half a metre" disabled={value <= 0} onClick={() => onChange(Math.max(0, value - .5))}>−</button>
+        <button type="button" aria-label="Raise mast by half a metre" disabled={value >= MAX_MAST_M} onClick={() => onChange(Math.min(MAX_MAST_M, value + .5))}>+</button>
+      </div>
 
       <div className="mast-preview" id="mast-preview-help" role="tooltip">
         <div className="mast-preview-head">
