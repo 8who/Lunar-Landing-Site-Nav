@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ExplorerMode from './modes/ExplorerMode'
 import ExpertMode from './modes/ExpertMode'
+import MastControl from './components/MastControl'
 import { buildHorizon } from './lib/astro/horizon'
 import { SITES } from './lib/astro/sites'
 import type { LunarSite } from './lib/astro/types'
@@ -103,7 +104,7 @@ export default function App() {
             <p>Lunar mission atlas · Surface light &amp; communications</p>
           </div>
         </div>
-        <div className="topbar-meta">
+        <div className={`topbar-meta${mode === 'expert' ? '' : ' no-mast'}`}>
           <div className={`segmented view-toggle${mode === 'expert' ? ' is-expert' : ''}`}>
             <span className="segmented-glide" aria-hidden="true" />
             <button
@@ -121,19 +122,7 @@ export default function App() {
               Expert
             </button>
           </div>
-          <label className="mast-control" title="Height of the solar array and antenna above the ground. A taller mast lifts the eye above the LOLA terrain skyline, which lowers the local horizon.">
-            <span>Mast</span>
-            <input
-              type="range"
-              min={0}
-              max={20}
-              step={0.5}
-              value={mastHeightM}
-              onChange={(e) => setMastHeightM(Number(e.target.value))}
-              aria-label="Mast height in metres"
-            />
-            <span className="mono">{mastHeightM} m</span>
-          </label>
+          {mode === 'expert' && <MastControl value={mastHeightM} onChange={setMastHeightM} />}
           <span className="pill" title="Independent NASA Space Apps Challenge project; not an official NASA product">NASA Space Apps · Independent project</span>
         </div>
       </header>
