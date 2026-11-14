@@ -164,21 +164,23 @@ export function buildTimeline(
     const a = samples[i - 1]
     const b = samples[i]
     const rSun = (a.sun.angularDiameterDeg + b.sun.angularDiameterDeg) / 4
-    // Linear interpolation of the horizon crossing inside each step. The Sun
-    // counts as up while its upper limb is above the skyline.
-    sunlitMs += dt * fractionAbove(
-      a.sun.elevation - sunHorizon(a) + rSun,
-      b.sun.elevation - sunHorizon(b) + rSun,
-    )
-    commMs += dt * fractionAbove(
-      a.earth.elevation - earthHorizon(a),
-      b.earth.elevation - earthHorizon(b),
-    )
+    // Horizon crossings come from the whole-disc clearance (highest visible
+    // point of the disc over the skyline at its own azimuth), linearly
+    // interpolated inside each step. The flat formula is the fallback.
+    const sunMargin = (s: SkySample) => s.sun.marginDeg ?? s.sun.elevation - sunHorizon(s) + rSun
+    const earthMargin = (s: SkySample) =>
+      s.earth.marginDeg ?? s.earth.elevation - earthHorizon(s) + s.earth.angularDiameterDeg / 2
+    sunlitMs += dt * fractionAbove(sunMargin(a), sunMargin(b))
+    commMs += dt * fractionAbove(earthMargin(a), earthMargin(b))
     if (a.sunlit && b.sunlit && a.earthVisible && b.earthVisible) jointMs += dt
 
     const midElev = (a.sun.elevation + b.sun.elevation) / 2
     const midHorizon = (sunHorizon(a) + sunHorizon(b)) / 2
-    const visible = discFractionAbove(midElev - midHorizon, rSun)
+    // Share of the solar disc above the skyline, sampled over the whole disc.
+    const visible =
+      a.sun.visibleFraction !== undefined && b.sun.visibleFraction !== undefined
+        ? (a.sun.visibleFraction + b.sun.visibleFraction) / 2
+        : discFractionAbove(midElev - midHorizon, rSun)
     const auRatio = KM_PER_AU / ((a.sun.distanceKm + b.sun.distanceKm) / 2)
     const flux = visible * auRatio * auRatio
     if (visible > 0) {

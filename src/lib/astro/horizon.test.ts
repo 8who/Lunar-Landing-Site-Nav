@@ -162,10 +162,14 @@ describe('sky flags use the terrain skyline', () => {
     const sky = observer.skyAt(START)
     expect(sky.sun.horizonDeg).toBeCloseTo(horizonAt(profile, sky.sun.azimuth), 10)
     expect(sky.earth.horizonDeg).toBeCloseTo(horizonAt(profile, sky.earth.azimuth), 10)
-    expect(sky.sunlit).toBe(
-      sky.sun.elevation > (sky.sun.horizonDeg ?? 0) - sky.sun.angularDiameterDeg / 2,
+    // Visibility is decided by the whole disc, not the centre line: some part
+    // of the disc must clear the skyline at its own azimuth.
+    expect(sky.sunlit).toBe((sky.sun.marginDeg ?? -1) > 0)
+    expect(sky.earthVisible).toBe((sky.earth.marginDeg ?? -1) > 0)
+    // The disc's best point clears the skyline at least as well as the centre.
+    expect(sky.earth.marginDeg!).toBeGreaterThanOrEqual(
+      sky.earth.elevation - (sky.earth.horizonDeg ?? 0) - 1e-9,
     )
-    expect(sky.earthVisible).toBe(sky.earth.elevation > (sky.earth.horizonDeg ?? 0))
   })
 
   it('turns a lit polar site dark when a 3.5 deg rim surrounds it', () => {

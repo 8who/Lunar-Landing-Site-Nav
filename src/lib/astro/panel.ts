@@ -108,7 +108,11 @@ export function bestFixedPanel(samples: SkySample[]): {
       ((a.sun.horizonDeg ?? -(a.horizonDipDeg ?? 0)) +
         (b.sun.horizonDeg ?? -(b.horizonDipDeg ?? 0))) /
       2
-    const visible = discFractionAbove(midElevation - horizon, rSun)
+    // Whole-disc share above the skyline when the samples carry it.
+    const visible =
+      a.sun.visibleFraction !== undefined && b.sun.visibleFraction !== undefined
+        ? (a.sun.visibleFraction + b.sun.visibleFraction) / 2
+        : discFractionAbove(midElevation - horizon, rSun)
     if (visible <= 0) continue
 
     // Shortest signed azimuth step, so a pair straddling north interpolates
