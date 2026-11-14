@@ -31,7 +31,7 @@ interface Props {
   t0: number
   /** Search horizon, days. */
   days: number
-  onOpen: (site: LunarSite, start: number) => void
+  onOpen: (site: LunarSite, start: number, criteria: { durationMs: number; constraints: OpportunityConstraints }) => void
 }
 
 interface Query {
@@ -152,6 +152,8 @@ export default function OpportunityPanel({ sites, t0, days, onOpen }: Props) {
       },
     })
   }
+
+  const open = (site: LunarSite, start: number) => onOpen(site, start, { durationMs, constraints: { ...query.constraints } })
 
   return (
     <section className="chart-card opportunity-card">
@@ -284,7 +286,7 @@ export default function OpportunityPanel({ sites, t0, days, onOpen }: Props) {
                               className={`opp-cell level-${levelFor(cell.metrics.jointPct)}${
                                 cell.meets ? ' is-meets' : ''
                               }`}
-                              onClick={() => onOpen(cell.site, cell.start)}
+                              onClick={() => open(cell.site, cell.start)}
                               title={cellTitle(cell)}
                               aria-label={cellTitle(cell)}
                             >
@@ -349,7 +351,7 @@ export default function OpportunityPanel({ sites, t0, days, onOpen }: Props) {
                         <button
                           type="button"
                           className="opp-open"
-                          onClick={() => onOpen(cell.site, cell.start)}
+                          onClick={() => open(cell.site, cell.start)}
                         >
                           Open
                         </button>
@@ -385,7 +387,7 @@ export default function OpportunityPanel({ sites, t0, days, onOpen }: Props) {
                         <button
                           type="button"
                           className="opp-open"
-                          onClick={() => onOpen(cell.site, cell.start)}
+                          onClick={() => open(cell.site, cell.start)}
                         >
                           Open
                         </button>

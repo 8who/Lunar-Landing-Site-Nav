@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { RankedSite } from '../lib/astro/ranking'
 import type { LunarSite } from '../lib/astro/types'
+import type { ResourceSearchCriteria } from '../lib/siteAlternatives'
 import { formatCoord, formatDecimal, formatPercent } from '../lib/format'
 import { loadMineralDataset, MINERAL_KEYS, MINERAL_PRODUCTS, sampleMineral, scoreResources, trekMetadataUrl, type MineralDataset, type MineralKey, type ResourcePreferences } from '../lib/resources/minerals'
 
-interface Props { rows: RankedSite[]; loading: boolean; onSelect: (site: LunarSite) => void }
+interface Props { rows: RankedSite[]; loading: boolean; onSelect: (site: LunarSite, criteria: ResourceSearchCriteria) => void }
 const INITIAL: ResourcePreferences = { mineralWeight: 35, target: 10, minSun: 50, minEarth: 50, minJoint: 25 }
 
 export default function MineralSelectionPanel({ rows, loading, onSelect }: Props) {
@@ -68,7 +69,7 @@ export default function MineralSelectionPanel({ rows, loading, onSelect }: Props
             <td>{row.eligible ? 'Meets minimums' : row.reasons.join('; ')}</td>
           </tr>)}
         </tbody></table></div>
-        {selected && <section className="mineral-detail" aria-labelledby="mineral-detail-title"><div><h3 id="mineral-detail-title">{selected.site.name}</h3><p>{formatCoord(selected.site.lat, selected.site.lon)}{selected.site.approx ? ' · approximate site coordinates' : ''}</p></div><button onClick={() => onSelect(selected.site)}>Explore this site</button>
+        {selected && <section className="mineral-detail" aria-labelledby="mineral-detail-title"><div><h3 id="mineral-detail-title">{selected.site.name}</h3><p>{formatCoord(selected.site.lat, selected.site.lon)}{selected.site.approx ? ' · approximate site coordinates' : ''}</p></div><button onClick={() => onSelect(selected.site, { mineral, radiusKm: radius, preferences: { ...prefs } })}>Explore this site</button>
           <dl className="mineral-measurements">{MINERAL_KEYS.map((key) => {
             const cell = sampleMineral(dataset[key].cells, selected.site.lat, selected.site.lon)?.atSite
             return <div key={key}><dt>{MINERAL_PRODUCTS[key].label} at site</dt><dd>{cell ? `${formatDecimal(cell.value, 3)} ${MINERAL_PRODUCTS[key].unit}` : 'No coverage'}</dd></div>

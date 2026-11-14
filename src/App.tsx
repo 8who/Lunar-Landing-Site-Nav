@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ExplorerMode from './modes/ExplorerMode'
 import ExpertMode from './modes/ExpertMode'
+import MastControl from './components/MastControl'
 import { buildHorizon } from './lib/astro/horizon'
 import { SITES } from './lib/astro/sites'
 import type { LunarSite } from './lib/astro/types'
 import { loadTerrainGrid } from './lib/terrainData'
 import './styles.css'
+import type { AlternativeSearch } from './lib/siteAlternatives'
 
 type Mode = 'explorer' | 'expert'
 
@@ -24,6 +26,7 @@ export default function App() {
   const [minutesOfDay, setMinutesOfDay] = useState(12 * 60)
   // Height of the solar array / antenna mast. Raising it lowers the horizon.
   const [mastHeightM, setMastHeightM] = useState(2)
+  const [alternativeSearch, setAlternativeSearch] = useState<AlternativeSearch | null>(null)
 
   // The LOLA grid powers the terrain horizon, not just the sky view. It loads
   // once; until it arrives (or if it fails) the app uses the flat model.
@@ -101,7 +104,7 @@ export default function App() {
             <p>Lunar mission atlas · Surface light &amp; communications</p>
           </div>
         </div>
-        <div className="topbar-meta">
+        <div className={`topbar-meta${mode === 'expert' ? '' : ' no-mast'}`}>
           <div className={`segmented view-toggle${mode === 'expert' ? ' is-expert' : ''}`}>
             <span className="segmented-glide" aria-hidden="true" />
             <button
@@ -119,19 +122,7 @@ export default function App() {
               Expert
             </button>
           </div>
-          <label className="mast-control" title="Height of the solar array and antenna above the ground. A taller mast lifts the eye above the LOLA terrain skyline, which lowers the local horizon.">
-            <span>Mast</span>
-            <input
-              type="range"
-              min={0}
-              max={20}
-              step={0.5}
-              value={mastHeightM}
-              onChange={(e) => setMastHeightM(Number(e.target.value))}
-              aria-label="Mast height in metres"
-            />
-            <span className="mono">{mastHeightM} m</span>
-          </label>
+          {mode === 'expert' && <MastControl value={mastHeightM} onChange={setMastHeightM} />}
           <span className="pill" title="Independent NASA Space Apps Challenge project; not an official NASA product">NASA Space Apps · Independent project</span>
         </div>
       </header>
@@ -145,6 +136,9 @@ export default function App() {
           minutesOfDay={minutesOfDay}
           onMinutesChange={setMinutesOfDay}
           t={t}
+          horizonFor={horizonFor}
+          alternativeSearch={alternativeSearch}
+          onAlternativeSearchChange={setAlternativeSearch}
         />
       ) : (
         <ExpertMode
@@ -154,6 +148,8 @@ export default function App() {
           onDayChange={setDay}
           t={t}
           horizonFor={horizonFor}
+          alternativeSearch={alternativeSearch}
+          onAlternativeSearchChange={setAlternativeSearch}
         />
       )}
     </div>

@@ -29,6 +29,17 @@ what you were looking at.
 
 - **Moon globe** (NASA SVS / LRO imagery) with the lunar rotation axis drawn on
   it; drag to spin, click anywhere to drop the site there.
+- **Named site markers**: round, outlined points with hover names and exact
+  catalogue selection. Only the selected marker is shown; **Browse all sites**
+  restores the catalogue, with a keyboard/touch picker for overlapping points.
+- **Alternatives**: up to three comparable sites beneath the globe in both modes.
+  Resource and calendar results carry their search criteria and dates into the
+  comparison. Otherwise, sites in the same category must be within 20 percentage
+  points of the selected site's sunlight, Earth visibility and joint availability.
+  The list uses the current mast and 1 h sampling; it can contain fewer than three
+  matches. Saved criteria are labeled and can be cleared to use the current range.
+  Jumping to an operation window also carries its start and duration: alternatives
+  must have 100% modeled simultaneous visibility throughout that same interval.
 - **30-day lunar-cycle scrubber**: one slider through a full day/night cycle,
   plus the UTC day.
 - **Plain-language verdict**: whether the site has Sun, Earth, both, and when the
@@ -123,6 +134,8 @@ lighting and link studies, not to be quoted as a precise landing solution.
 | Moon body-fixed frame | IAU WGCCRE 2015 orientation (pole + W) with periodic libration terms |
 | Observer position | The site's own radius vector is used explicitly; from the surface, Earth's parallax reaches 0.26°, about half of Earth's own apparent diameter, so the Moon-centre direction is not enough |
 | Horizon | Terrain skyline from the LOLA `ldem_4` grid: 120 azimuth bins (3°), radial march to 400 km (0.25 km steps for the first 8 km) with exact lunar curvature, the eye raised by the mast. Near the poles the grid is low-passed in longitude to its real ~7.6 km resolution, because the raw 17–80 m polar columns carry noise that reads as cliffs. Falls back to the flat tangent plane while the grid loads or if it fails |
+| Map layers | Buttons on the Moon globe: **Light / shadow** = % of a year that some part of the Sun clears the LOLA terrain skyline at ground level, precomputed for every 0.25° cell (`scripts/build-illumination-map.ts`, Sun every 4 h over 2026; ~7.6 km cells near the poles, 1° below 60°) → 0% marks permanent shadow (Cabeus, Shackleton floor). **Temperature** uses the nearest two-hour map sample to the selected instant: radiative equilibrium with LOLA slopes by day (subsolar ≈ 385 K), a cooling curve by night (~120 → 95 K at the equator), 40 K in permanently shadowed cells; a model, not Diviner data. The displayed site temperature uses that same map sample. **Altitude**: LOLA `ldem_4`. Named landing-site markers remain selectable on every layer. |
+| High-res poles | 80–90° caps rebuilt from NASA LOLA `ldem_16` (1.9 km, 4× the global grid) in polar stereographic (`scripts/build_polar.py`): altitude at 0.75 km, year-round sunlight recomputed at 1.5 km with skylines on the 1.9 km DEM (`scripts/build-polar-illumination.ts`), temperature with the finer slopes. These caps are map layers; site planning still uses its existing `ldem_4` horizon model and validated site coordinates. The photo layer uses the 8K LROC colour mosaic where the GPU allows. |
 | Sunlight | Upper limb of the 0.53° solar disc above the skyline; a partly risen Sun still lights the site, weighted by visible-disc area |
 | Power | Visible-disc fraction × incidence × (1 AU / r)², for a vertical Sun-tracking array (cos e, polar-lander practice) and a flat panel (sin e). A flat panel at the pole gets ~1% of the solar constant; a vertical one ~50% |
 | Fixed panel | Score = integral of max(0, normal · Sun) over the range, relative to a perfect two-axis Sun-tracking panel; searched on a 1° tilt × 10° azimuth grid |
