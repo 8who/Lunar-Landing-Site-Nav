@@ -591,7 +591,7 @@ const skyTime = hover?.t ?? pinned?.t ?? playhead
           <section className="chart-card sky-card">
             <div className="chart-head">
               <div>
-                <h2>Sky view</h2>
+                <h2>Lunar Point of View</h2>
                 <p>
                   First person from {site.name} · {formatUtc(skyTime, { seconds: true })}
                   {pinned && !hover ? ' · pinned from the chart' : ''}

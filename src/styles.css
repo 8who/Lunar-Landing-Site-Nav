@@ -3666,3 +3666,79 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
   .sky-cutaway { position: static; order: 3; margin: 8px; }
   .sky-caption { position: static; order: 4; padding: 8px 10px; text-shadow: none; }
 }
+
+/* --------------------------------------------------------------------------
+   Lunar Point of View: full screen (native Fullscreen API, or a fixed overlay
+   where the browser has none). The canvas follows its host via ResizeObserver.
+   -------------------------------------------------------------------------- */
+.sky-pov { position: relative; }
+.sky-pov.is-full {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  padding: 14px 18px 16px;
+  color: var(--text);
+  background: var(--bg-0);
+}
+.sky-pov.is-overlay { position: fixed; inset: 0; z-index: 1000; width: 100vw; height: 100dvh; }
+.sky-pov::backdrop { background: var(--bg-0); }
+.sky-pov.is-full .sky-view { flex: 1 1 auto; height: auto; min-height: 0; }
+.sky-pov.is-full .sky-canvas { flex: 1 1 auto; height: auto; min-height: 220px; }
+.sky-pov.is-full .dsn-list { margin-top: 0; }
+.sky-pov-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.sky-pov-head h2 { margin: 0; font-size: 20px; font-weight: 600; }
+.sky-pov-head p { margin: 4px 0 0; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.sky-pov-head .sky-pov-hint { margin: 0; font-size: 13px; }
+.sky-controls .sky-full-toggle { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; white-space: nowrap; }
+.sky-full-toggle svg { flex: none; }
+.sky-pov.is-full { overflow-y: auto; overscroll-behavior: contain; }
+@media (hover: none) { .sky-pov-hint { display: none; } }
+@media (max-width: 600px) {
+  /* Phones: a tall sky first; caption and DSN list scroll beneath it. */
+  .sky-pov.is-full { gap: 8px; padding: 10px 10px 14px; }
+  .sky-pov.is-full .sky-view { flex: none; }
+  .sky-pov.is-full .sky-canvas { flex: none; height: 62dvh; min-height: 300px; }
+}
+
+/* --------------------------------------------------------------------------
+   Text that left its box
+   -------------------------------------------------------------------------- */
+/* Moon map credit: inside the globe frame (17 px card padding + 12 px inset),
+   clear of "Browse all sites"; mobile keeps its own static caption row. */
+@media (min-width: 601px) {
+  .explorer-hero .globe-caption { left: 29px; bottom: 27px; max-width: calc(100% - 230px); line-height: 1.3; }
+}
+/* Date fields: room for dd/mm/yyyy in every locale, at a readable size. */
+.explorer-controls, .controls.explorer-controls { grid-template-columns: 228px minmax(0, 1fr); }
+.day-row input[type='date'] { min-width: 0; font: 13px 'IBM Plex Mono', monospace; }
+input[type='date'] { min-width: 9.6em; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) {
+  .explorer-controls, .controls.explorer-controls { grid-template-columns: 1fr; }
+}
+/* "Open" in the window shortlist never shrinks below its label. */
+.opp-open { flex-shrink: 0; min-width: max-content; white-space: nowrap; }
+
+/* --------------------------------------------------------------------------
+   Readability floor: no reading text under 12 px (checked at 1280 x 720).
+   -------------------------------------------------------------------------- */
+.sky-overlay { font-size: 13px; }
+.sky-caption { font-size: 12px; line-height: 1.45; }
+.sky-controls button { font-size: 13px; }
+.dsn-list, .dsn-row { font-size: 13px; }
+.readout-time { font-size: 13px; }
+.readout-sub, .panel-sub, .chart-legend span, .legend-hint { font-size: 12.5px; }
+.scrub-label { font-size: 11.5px; }
+.mast-preview-head, .mast-preview-head .mono { font-size: 12px; }
+.mast-preview p { font-size: 12.5px; }
+.explorer-picked span { font-size: 13px; }
+.opp-cell { font-size: 12px; }
+.opp-corner, .opp-month, .opp-day { font-size: 11.5px; }
+.opp-subhead, .opp-legend-title, .opp-legend-step, .opp-legend-note { font-size: 12px; }
+.opp-footnote { font-size: 12.5px; }
+small, .site-cell small, .opp-result-site small { font-size: max(12px, .83em); }
+.hover-strip, .hover-strip span { font-size: 12.5px; }
+@media (max-width: 600px) {
+  .sky-overlay, .sky-caption, .dsn-list, .dsn-row, .sky-controls button { font-size: 15px; }
+}

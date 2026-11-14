@@ -44,11 +44,13 @@ what you were looking at.
   plus the UTC day.
 - **Plain-language verdict**: whether the site has Sun, Earth, both, and when the
   next sunset and Earthset are.
-- **What you would see**: first-person sky from the site at the chosen instant,
+- **Lunar Point of View**: first-person sky from the site at the chosen instant,
   standing on a 300 km patch of real LOLA terrain sampled around the site. Earth
   is a textured 3D globe (Blue Marble day / Black Marble night) with a live
   terminator, and the three Deep Space Network complexes are drawn on it. The
   same elevation grid sets the skyline that the sunlight and link flags use.
+  **Full screen** (in both views) fills the screen with the sky, readouts and
+  DSN list; Esc or the same button exits.
 - **Solar array card**: recommended tilt, 16-point heading, the azimuth turn rate
   a Sun-tracking array needs, and average W/m².
 - **Mission-window planner**: searches 1–72 hours of continuous sunlight plus
@@ -75,9 +77,9 @@ what you were looking at.
   source bins. Set sunlight/Earth minimums and a resource weight; inspect source
   footprints or nearby regional maxima without implying lander-scale deposits.
   See [data provenance, reproducible import, and scoring](docs/MINERAL_DATA.md).
-- **Sky view** for any instant pinned on the timeline: drag to look around,
-  scroll to zoom, and station labels appear once the field of view is narrow
-  enough.
+- **Lunar Point of View** for any instant pinned on the timeline: drag to look
+  around, scroll to zoom, and station labels appear once the field of view is
+  narrow enough. Full screen works here too.
 
 The first-person Sun and Earth use their true angular diameters. Focus Sun/Earth
 zooms to frame a visible disc at 30% of the shorter viewport dimension and
