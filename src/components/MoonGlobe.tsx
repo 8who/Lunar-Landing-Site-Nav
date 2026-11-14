@@ -121,6 +121,24 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     )
     globe.add(markers)
 
+    // Rotation axis: lunar +z is the north pole, so the line runs along local z
+    // and inherits the globe tilt, ending up world-vertical. It pokes out past
+    // the surface so the poles are readable from any angle; depth testing hides
+    // the half behind the sphere.
+    const axisLength = RADIUS * 1.35
+    const axisGeometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, -axisLength),
+      new THREE.Vector3(0, 0, axisLength),
+    ])
+    const axisMaterial = new THREE.LineBasicMaterial({
+      color: 0x9fd8ff,
+      transparent: true,
+      opacity: 0.4,
+      depthWrite: false,
+    })
+    const rotationAxis = new THREE.Line(axisGeometry, axisMaterial)
+    globe.add(rotationAxis)
+
     // Drag rotates this wrapper, never the globe itself: the mapping from a
     // clicked point to lat/lon stays in the sphere's own frame.
     const orbit = new THREE.Group()
@@ -348,6 +366,9 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       markers.geometry.dispose()
       markers.material.dispose()
       markers.parent?.remove(markers)
+      axisGeometry.dispose()
+      axisMaterial.dispose()
+      rotationAxis.parent?.remove(rotationAxis)
       geometry.dispose()
       // Dispose whichever map is bound: the real one if it loaded, else the
       // procedural fallback. A late load disposes itself via `disposed`.
