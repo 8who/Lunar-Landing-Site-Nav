@@ -108,3 +108,66 @@ describe('Deep Space Network link', () => {
     expect(DSN_STATIONS).toHaveLength(3)
   })
 })
+
+describe('DSN antennas on Earth\'s disc', () => {
+  it('places every antenna inside the disc, near the centre when the Moon is overhead there', async () => {
+    const { stationSkyPoints, dsnStatus } = await import('./earthView')
+    const site = siteById('malapert')!
+    const R = Math.PI / 180
+    for (let h = 0; h < 48; h += 6) {
+      const t = Date.parse('2026-11-14T00:00:00Z') + h * 3_600_000
+      const earth = createObserver(site).skyAt(t).earth
+      const points = stationSkyPoints(site, t, earth)
+      const status = dsnStatus(t, true)
+      for (const st of status) {
+        const p = points.get(st.station.id)!
+        // Angular distance from Earth's centre on the sky.
+        const c =
+          Math.sin(p.elevation * R) * Math.sin(earth.elevation * R) +
+          Math.cos(p.elevation * R) * Math.cos(earth.elevation * R) * Math.cos((p.azimuth - earth.azimuth) * R)
+        const sep = Math.acos(Math.min(1, c)) / R
+        const radius = earth.angularDiameterDeg / 2
+        expect(sep).toBeLessThanOrEqual(radius * 1.001)
+        // sin(Moon elevation at the antenna) ~ how close it is to the disc centre.
+        const expected = radius * Math.cos(Math.max(0, st.moonElevation) * R)
+        if (st.moonElevation > 0) expect(Math.abs(sep - expected)).toBeLessThan(0.05)
+      }
+    }
+  })
+})
+
+describe('only antennas on the side of Earth facing the site can link', () => {
+  it('never links a back-side antenna, even though it projects inside the disc', async () => {
+    const { stationSkyPoints, dsnStatus, siteSeesStation } = await import('./earthView')
+    let backSide = 0
+    let links = 0
+    for (const id of ['apollo11', 'malapert', 'shackleton']) {
+      const site = siteById(id)!
+      const observer = createObserver(site)
+      for (let h = 0; h < 24 * 30; h += 2) {
+        const t = Date.parse('2026-11-14T00:00:00Z') + h * 3_600_000
+        const sky = observer.skyAt(t)
+        const points = stationSkyPoints(site, t, sky.earth)
+        const status = dsnStatus(t, (st) => siteSeesStation(points.get(st.id), observer.skyline.at))
+        for (const st of status) {
+          const p = points.get(st.station.id)!
+          // Geometry and astronomy-engine agree on which side the antenna is on
+          // (Moon centre vs site parallax and refraction: < 1 deg).
+          expect(Math.abs(p.siteElevationAtStation - st.moonElevation)).toBeLessThan(1)
+          if (!p.facing) {
+            backSide++
+            expect(siteSeesStation(p, observer.skyline.at)).toBe(false)
+            expect(st.state).not.toBe('link')
+          }
+          if (st.state === 'link') {
+            links++
+            expect(p.facing).toBe(true)
+            expect(p.siteElevationAtStation).toBeGreaterThan(9)
+          }
+        }
+      }
+    }
+    expect(backSide).toBeGreaterThan(100)
+    expect(links).toBeGreaterThan(100)
+  })
+})

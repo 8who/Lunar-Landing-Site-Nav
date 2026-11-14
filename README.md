@@ -104,7 +104,7 @@ lighting and link studies, not to be quoted as a precise landing solution.
 | Sun/Moon position | `astronomy-engine` (VSOP87 / ELP-2000 series), geometric J2000 vectors |
 | Moon body-fixed frame | IAU WGCCRE 2015 orientation (pole + W) with periodic libration terms |
 | Observer position | The site's own radius vector is used explicitly; from the surface, Earth's parallax reaches 0.26°, about half of Earth's own apparent diameter, so the Moon-centre direction is not enough |
-| Horizon | Terrain skyline from the LOLA `ldem_4` grid: 120 azimuth bins (3°), radial march to 400 km with exact lunar curvature, the eye raised by the mast. Falls back to the flat tangent plane while the grid loads or if it fails |
+| Horizon | Terrain skyline from the LOLA `ldem_4` grid: 120 azimuth bins (3°), radial march to 400 km (0.25 km steps for the first 8 km) with exact lunar curvature, the eye raised by the mast. Near the poles the grid is low-passed in longitude to its real ~7.6 km resolution, because the raw 17–80 m polar columns carry noise that reads as cliffs. Falls back to the flat tangent plane while the grid loads or if it fails |
 | Sunlight | Upper limb of the 0.53° solar disc above the skyline; a partly risen Sun still lights the site, weighted by visible-disc area |
 | Power | Visible-disc fraction × incidence × (1 AU / r)², for a vertical Sun-tracking array (cos e, polar-lander practice) and a flat panel (sin e). A flat panel at the pole gets ~1% of the solar constant; a vertical one ~50% |
 | Fixed panel | Score = integral of max(0, normal · Sun) over the range, relative to a perfect two-axis Sun-tracking panel; searched on a 1° tilt × 10° azimuth grid |
@@ -151,6 +151,7 @@ expected; elevation tolerance is 0.02°, azimuth 0.05°, Earth distance 100 km.
 | --- | --- |
 | `horizons.test.ts` | the JPL comparison and the physical sanity anchors above |
 | `horizon.test.ts` | skyline from a synthetic grid: curvature, crater rims, mast, azimuth interpolation, flat-model fallback |
+| `skyline.validation.test.ts` | skyline on the real LOLA grid: agrees with an independent 0.1 km brute-force march (< 0.6°), no polar column cliffs, Cabeus and Shackleton floor stay at 0% sunlight, rim and ridge crests lit 70–97% of a year at 10 m (published 80–92%) |
 | `timeline.test.ts` | sampling, horizon crossings, window edges, metrics |
 | `earthView.test.ts` | Earth orientation, DSN geometry, station coverage |
 | `panel.test.ts`, `power.test.ts`, `mast.test.ts` | fixed vs tracking power, mast dip, pointing |

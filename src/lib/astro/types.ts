@@ -81,6 +81,10 @@ export interface SkyDirection {
    * sphere, i.e. -horizonDipDeg.
    */
   horizonDeg?: number
+  /** Share of the disc area above the skyline, 0..1 (whole disc tested, not just the centre) */
+  visibleFraction?: number
+  /** Clearance of the highest visible point of the disc over the skyline, deg; > 0 iff any part is visible */
+  marginDeg?: number
 }
 
 export interface SkySample {
@@ -90,9 +94,9 @@ export interface SkySample {
   earth: SkyDirection
   /** Geometric horizon dip seen from the top of the mast, deg; absent when a terrain skyline is in use */
   horizonDipDeg?: number
-  /** Some of the solar disc above the skyline (upper limb clears it) */
+  /** Some part of the solar disc above the skyline */
   sunlit: boolean
-  /** Earth's centre above the skyline: direct-to-Earth link possible */
+  /** Some part of Earth's disc above the skyline (see DSN status for each antenna) */
   earthVisible: boolean
 }
 

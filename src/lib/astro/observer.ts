@@ -18,6 +18,7 @@
 
 import { Body, GeoVector, MakeTime } from 'astronomy-engine'
 import { horizonAt, MOON_RADIUS_KM } from './horizon'
+import { discVisibility, flatSkyline, type Skyline } from './disc'
 import { bodyBasis, moonOrientation, toBody, toSelenographic } from './lunarFrame'
 import { DEG, RAD, cross, dot, normalize, scale, sub, vec, type Vec3 } from './vec'
 import type { LunarSite, SkyDirection, SkySample } from './types'
@@ -115,8 +116,10 @@ export interface SiteObserver {
   sunElevation(date: Date | number): number
   /** Any part of the solar disc above the skyline seen from the mast top */
   sunVisible(date: Date | number): boolean
-  /** Earth's centre above the skyline seen from the mast top (antenna line of sight) */
+  /** Any part of Earth's disc above the skyline seen from the mast top */
   earthVisible(date: Date | number): boolean
+  /** The skyline every disc test uses (terrain, or the flat dip) */
+  skyline: Skyline
   /** Flat-model horizon dip at the mast top, deg (for the mast readout) */
   horizonDipDeg: number
   /** Horizon elevation towards a compass azimuth, deg (terrain or flat) */
@@ -140,6 +143,21 @@ export function createObserver(site: LunarSite): SiteObserver {
 
   const horizonElevation = (azimuthDeg: number) =>
     terrain ? horizonAt(terrain, azimuthDeg) : -dip
+  const skyline: Skyline = terrain
+    ? {
+        at: horizonElevation,
+        min: Math.min(...Array.from(terrain.elevations)),
+        max: Math.max(...Array.from(terrain.elevations)),
+      }
+    : flatSkyline(-dip)
+
+  /** Whole-disc visibility of a body at `rel` (km, site -> body), radius `radiusKm`. */
+  const discOf = (rel: Vec3, radiusKm: number) => {
+    const u = normalize(rel)
+    const d = Math.sqrt(dot(rel, rel))
+    const elev = Math.asin(Math.max(-1, Math.min(1, dot(u, frame.up)))) * DEG
+    return discVisibility(azimuthOf(u, frame), elev, Math.atan(radiusKm / d) * DEG, skyline)
+  }
 
   const relativeVectors = (date: Date | number) => {
     const t = MakeTime(date instanceof Date ? date : new Date(date))
@@ -165,21 +183,13 @@ export function createObserver(site: LunarSite): SiteObserver {
     return Math.asin(Math.max(-1, Math.min(1, dot(normalize(sunRel), frame.up)))) * DEG
   }
 
-  const sunVisible = (date: Date | number) => {
-    const { sunRel } = relativeVectors(date)
-    const u = normalize(sunRel)
-    const d = Math.sqrt(dot(sunRel, sunRel))
-    const elev = Math.asin(Math.max(-1, Math.min(1, dot(u, frame.up)))) * DEG
-    const azimuth = azimuthOf(u, frame)
-    return elev > horizonElevation(azimuth) - Math.atan(SUN_RADIUS_KM / d) * DEG
-  }
+  // Visible means some part of the disc clears the skyline at its own azimuth,
+  // not just the centre (see disc.ts).
+  const sunVisible = (date: Date | number) =>
+    discOf(relativeVectors(date).sunRel, SUN_RADIUS_KM).marginDeg > 0
 
-  const earthVisible = (date: Date | number) => {
-    const { earthRel } = relativeVectors(date)
-    const u = normalize(earthRel)
-    const elev = Math.asin(Math.max(-1, Math.min(1, dot(u, frame.up)))) * DEG
-    return elev > horizonElevation(azimuthOf(u, frame))
-  }
+  const earthVisible = (date: Date | number) =>
+    discOf(relativeVectors(date).earthRel, EARTH_RADIUS_KM).marginDeg > 0
 
   const earthElevation = (date: Date | number) => {
     const { earthRel } = relativeVectors(date)
@@ -191,6 +201,7 @@ export function createObserver(site: LunarSite): SiteObserver {
     sunElevation,
     sunVisible,
     earthVisible,
+    skyline,
     horizonDipDeg: dip,
     horizonElevation,
     earthElevation,
@@ -200,14 +211,27 @@ export function createObserver(site: LunarSite): SiteObserver {
       const earth = direction(earthRel, frame, EARTH_RADIUS_KM)
       const sunHorizon = horizonElevation(sun.azimuth)
       const earthHorizon = horizonElevation(earth.azimuth)
+      const sunDisc = discOf(sunRel, SUN_RADIUS_KM)
+      const earthDisc = discOf(earthRel, EARTH_RADIUS_KM)
       return {
         t: (date instanceof Date ? date : new Date(date)).getTime(),
-        sun: { ...sun, horizonDeg: sunHorizon },
-        earth: { ...earth, horizonDeg: earthHorizon },
+        sun: {
+          ...sun,
+          horizonDeg: sunHorizon,
+          visibleFraction: sunDisc.fraction,
+          marginDeg: sunDisc.marginDeg,
+        },
+        earth: {
+          ...earth,
+          horizonDeg: earthHorizon,
+          visibleFraction: earthDisc.fraction,
+          marginDeg: earthDisc.marginDeg,
+        },
         horizonDipDeg: terrain ? undefined : dip,
-        // Upper limb above the skyline: a partly risen Sun still lights the site.
-        sunlit: sun.elevation > sunHorizon - sun.angularDiameterDeg / 2,
-        earthVisible: earth.elevation > earthHorizon,
+        // Any part of the disc above the skyline: a partly risen Sun still
+        // lights the site, and a sliver of Earth still gives line of sight.
+        sunlit: sunDisc.marginDeg > 0,
+        earthVisible: earthDisc.marginDeg > 0,
       }
     },
   }

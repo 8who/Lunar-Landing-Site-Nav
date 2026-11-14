@@ -1,4 +1,4 @@
-import { elevationAt } from './terrain'
+import { elevationAt, isotropicGrid } from './terrain'
 import type { HorizonProfile } from './types'
 
 /**
@@ -48,6 +48,7 @@ export interface HorizonOptions {
  * and coarser with distance where the grid itself is the limit.
  */
 function marchStepKm(distanceKm: number): number {
+  if (distanceKm < 8) return 0.25
   if (distanceKm < 40) return 1
   if (distanceKm < 120) return 2
   return 4
@@ -69,11 +70,14 @@ export function buildHorizon(
   const stepDeg = 360 / bins
   const mastM = Math.max(0, opts.mastHeightM ?? 0)
   const limitKm = Math.max(10, opts.maxDistanceKm ?? 400)
+  // Isotropic copy: near the poles the raw columns are tens of metres wide and
+  // their noise would read as cliffs (see isotropicGrid).
+  const dem = isotropicGrid(grid)
 
   // Ground and eye in the same datum as the sky elevations: radius above the
   // 1737.4 km sphere. The grid, not a catalogue figure, sets the ground here,
   // so the profile and the sky can never disagree about the datum.
-  const groundElevationM = elevationAt(grid, lat, lon) * 1000
+  const groundElevationM = elevationAt(dem, lat, lon) * 1000
   const eyeRadiusKm = MOON_RADIUS_KM + groundElevationM / 1000 + mastM / 1000
   // The highest point on the Moon bounds any sample: if even that cannot beat
   // the running maximum, the rest of this azimuth is settled.
@@ -123,7 +127,7 @@ export function buildHorizon(
       const dirZ = upZ * cosArc + (northZ * cosT + eastZ * sinT) * sinArc
       const pointLat = Math.asin(Math.max(-1, Math.min(1, dirZ))) * DEG
       const pointLon = Math.atan2(dirY, dirX) * DEG
-      const pointRadiusKm = MOON_RADIUS_KM + elevationAt(grid, pointLat, pointLon)
+      const pointRadiusKm = MOON_RADIUS_KM + elevationAt(dem, pointLat, pointLon)
 
       const elevationDeg =
         Math.atan2(pointRadiusKm * cosArc - eyeRadiusKm, pointRadiusKm * sinArc) * DEG

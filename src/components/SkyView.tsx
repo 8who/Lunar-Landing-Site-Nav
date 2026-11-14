@@ -9,6 +9,8 @@ import {
   dsnStatus,
   earthAxesInSky,
   earthFixedUnit,
+  siteSeesStation,
+  stationSkyPoints,
   type DsnLinkState,
   type DsnStatus,
   type EarthAxes,
@@ -53,7 +55,7 @@ const LINK_COLOR: Record<DsnLinkState, number> = {
 const LINK_TEXT: Record<DsnLinkState, string> = {
   link: 'link',
   low: `Moon below ${DSN_MIN_ELEVATION_DEG}°`,
-  'site-blind': 'Earth hidden from site',
+  'site-blind': 'antenna behind the lunar skyline',
   'moon-down': 'Moon not in view',
 }
 
@@ -100,6 +102,13 @@ function makeEarthMaterial(): THREE.ShaderMaterial {
 }
 
 /** Text label for a DSN complex, drawn on a canvas sprite. */
+/** Visible share of a disc as a short percentage. */
+function pct(fraction: number | undefined): string {
+  if (fraction === undefined) return 'part'
+  if (fraction > 0 && fraction < 0.01) return '<1%'
+  return `${Math.round(fraction * 100)}%`
+}
+
 function makeLabel(text: string): THREE.Sprite {
   const canvas = document.createElement('canvas')
   canvas.width = 256
@@ -667,8 +676,14 @@ export default function SkyView({ site, t, panel }: Props) {
   }, [site.lat, site.lon])
 
   useEffect(() => {
-    const sample = createObserver(site).skyAt(t)
-    const stations = dsnStatus(t, sample.earthVisible)
+    const observer = createObserver(site)
+    const sample = observer.skyAt(t)
+    // Each antenna is tested at its own point on Earth's disc, not at the
+    // centre: at a polar site part of the disc can be behind a ridge.
+    const points = stationSkyPoints(site, t, sample.earth)
+    const stations = dsnStatus(t, (station) =>
+      siteSeesStation(points.get(station.id), observer.skyline.at),
+    ).map((st) => ({ ...st, skyPoint: points.get(st.station.id) }))
     updateRef.current(sample, site.id, earthAxesInSky(site, t), stations)
     setSky(sample)
     setDsn(stations)
@@ -685,11 +700,12 @@ export default function SkyView({ site, t, panel }: Props) {
         {sky && (
           <div className="sky-overlay">
             <p className={sky.sunlit ? 'sun-text' : 'bad-text'}>
-              Sun: {sky.sunlit ? 'visible' : 'below skyline'} (elev {deg(sky.sun.elevation)} · skyline{' '}
-              {deg(sky.sun.horizonDeg ?? -(sky.horizonDipDeg ?? 0))})
+              Sun: {sky.sunlit ? `${pct(sky.sun.visibleFraction)} of the disc visible` : 'below skyline'}{' '}
+              (elev {deg(sky.sun.elevation)} · skyline {deg(sky.sun.horizonDeg ?? -(sky.horizonDipDeg ?? 0))})
             </p>
             <p className={sky.earthVisible ? 'earth-text' : 'bad-text'}>
-              Earth: {sky.earthVisible ? 'visible' : 'below skyline'} (elev{' '}
+              Earth: {sky.earthVisible ? `${pct(sky.earth.visibleFraction)} of the disc visible` : 'below skyline'}{' '}
+              (elev{' '}
               {deg(sky.earth.elevation)} · skyline {deg(sky.earth.horizonDeg ?? -(sky.horizonDipDeg ?? 0))})
             </p>
             {panel && (
