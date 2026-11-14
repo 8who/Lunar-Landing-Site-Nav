@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import TimelineChart from '../components/TimelineChart'
 import RankingTable from '../components/RankingTable'
 import MineralSelectionPanel from '../components/MineralSelectionPanel'
@@ -133,14 +133,17 @@ export default function ExpertMode({
   )
 
   // A pinned moment belongs to one site and one range: drop it when either moves.
-  useEffect(() => {
+  useLayoutEffect(() => {
     setPinned(null)
-  }, [site.id, site.lat, site.lon, t0, t1, stepMin])
+    setHover(null)
+  }, [site.id, site.lat, site.lon, t0, t1, stepMin, t])
 
-  const focus = hover ?? pinned ?? samples[Math.floor(samples.length / 2)]
   // Sky view follows the hovered sample, then the pinned one, then the shared instant.
   const skyTime = hover?.t ?? pinned?.t ?? t
   const sky = useMemo(() => createObserver(site).skyAt(skyTime), [site, skyTime])
+  // Readout, cursor and first-person view describe one instant. Previously the
+  // readout silently used the range midpoint while the sky used shared time.
+  const focus = sky
   // Flat-model dip at the mast top: the fallback skyline when no terrain is attached.
   const flatDip = sky.horizonDipDeg ?? 0
 
@@ -417,9 +420,9 @@ export default function ExpertMode({
                   </span>
                 </div>
                 <div>
-                  <span className="readout-label">Link</span>
+                  <span className="readout-label">Earth line of sight</span>
                   <strong className={focus.earthVisible ? 'ok-text' : 'bad-text'}>
-                    {focus.earthVisible ? 'OPEN' : 'BLOCKED'}
+                    {focus.earthVisible ? 'VISIBLE' : 'BLOCKED'}
                   </strong>
                   <span className="readout-sub">
                     Earth {(focus.earth.distanceKm / 1000).toFixed(0)}k km ·{' '}
@@ -436,6 +439,7 @@ export default function ExpertMode({
               commWindows={commWindows}
               onHover={setHover}
               pinned={pinned}
+              active={sky}
               onPick={setPinned}
             />
           </section>

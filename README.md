@@ -68,6 +68,19 @@ what you were looking at.
   scroll to zoom, and station labels appear once the field of view is narrow
   enough.
 
+The first-person Sun and Earth use their true angular diameters. Focus Sun/Earth
+zooms to frame a visible disc at 30% of the shorter viewport dimension and
+keeps the camera following that body while time changes; dragging restores a
+free camera. Focusing a hidden body keeps the current zoom, including in cutaway
+mode. Ground and celestial pixels are clipped against the same skyline
+profile as the visibility calculations, including mast dip while terrain loads.
+The regional foreground remains illustrative. See-through ground deliberately
+reveals occulted bodies and is labeled as a cutaway, not physical visibility.
+Earth line of sight means some part of the disc clears the skyline; an actual
+DSN link additionally requires an antenna in view (shown in the station list).
+Manual zoom reaches a 0.5° field of view (about 160× magnification relative to the
+initial view). Reset zoom restores the wide 70° view.
+
 **Mast height** (0–20 m) is set in the header and applies to both views: it lifts
 the eye above the terrain skyline, lowering the horizon in every direction, and
 that skyline feeds sunlight, Earth visibility, power, the fixed-panel search and

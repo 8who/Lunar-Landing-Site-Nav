@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { createLunarTerrain } from './lunarTerrain'
+import { apparentBodyRadius, applySkylineMask, createSkylineMask } from './skyVisibility'
 import { loadTerrainGrid } from '../lib/terrainData'
 import { createObserver } from '../lib/astro/observer'
 import {
@@ -19,6 +20,7 @@ import { panelNormalSky, compassPoint16, tiltArcPoints } from '../lib/astro/pane
 import { isTerrainCritical } from '../lib/astro/sites'
 import type { LunarSite, SkySample } from '../lib/astro/types'
 import { deg } from '../lib/format'
+import { focusZoomFieldOfView, skyMagnification, SKY_FOV_MIN, SKY_FOV_MAX, SKY_FOV_WIDE } from '../lib/skyCamera'
 
 interface Props {
   site: LunarSite
@@ -31,17 +33,13 @@ interface Props {
 const RAD = Math.PI / 180
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
-/** Scene units. Bodies sit on this shell; the ground is closer, so it occludes them. */
+/** Scene units. A shared angular skyline mask determines celestial occultation. */
 const SKY_RADIUS = 100
 const GROUND_RADIUS = 55
 const STAR_RADIUS = 320
 
-/** Real angular sizes are unreadable at 70° FOV; the caption says so. */
-const SIZE_BOOST = 3
-const MIN_SIZE_DEG = 0.5
-
 /** Field of view: wide sky view, and the zoomed-in Earth close-up. */
-const FOV_WIDE = 70
+const FOV_WIDE = SKY_FOV_WIDE
 /** DSN labels only make sense once Earth is big enough to read them. */
 const LABEL_FOV = 30
 
@@ -105,7 +103,9 @@ function makeEarthMaterial(): THREE.ShaderMaterial {
 /** Visible share of a disc as a short percentage. */
 function pct(fraction: number | undefined): string {
   if (fraction === undefined) return 'part'
-  if (fraction > 0 && fraction < 0.01) return '<1%'
+  // Limb samples can detect a sliver before any area sample clears the rim.
+  if (fraction < 0.01) return '<1%'
+  if (fraction > 0.99 && fraction < 1) return '>99%'
   return `${Math.round(fraction * 100)}%`
 }
 
@@ -158,10 +158,9 @@ function skyVector(azimuthDeg: number, elevationDeg: number, distance: number): 
   ).multiplyScalar(distance)
 }
 
-/** Radius on the sky shell for an apparent diameter, after the exaggeration. */
+/** True apparent size; magnification belongs to the camera, not the bodies. */
 function bodyRadius(angularDiameterDeg: number): number {
-  const apparent = Math.max(angularDiameterDeg * SIZE_BOOST, MIN_SIZE_DEG)
-  return Math.tan((apparent * RAD) / 2) * SKY_RADIUS
+  return apparentBodyRadius(angularDiameterDeg, SKY_RADIUS)
 }
 
 /** Soft radial glow, generated on a canvas so we need no texture assets. */
@@ -228,22 +227,29 @@ export default function SkyView({ site, t, panel }: Props) {
   const [fov, setFov] = useState(70)
   const hostRef = useRef<HTMLDivElement>(null)
   const updateRef = useRef<
-    (sample: SkySample, siteId: string, axes: EarthAxes, dsn: DsnStatus[]) => void
+    (sample: SkySample, viewSite: LunarSite, axes: EarthAxes, dsn: DsnStatus[]) => void
   >(() => {})
   const updatePanelRef = useRef<(panel: Props['panel']) => void>(() => {})
   // The scene effect runs once, so it reads the latest prop through this ref.
   const latestPanelRef = useRef<Props['panel']>(panel ?? null)
   latestPanelRef.current = panel ?? null
-  const [sky, setSky] = useState<SkySample | null>(null)
-  const [dsn, setDsn] = useState<DsnStatus[]>([])
+  const observer = useMemo(() => createObserver(site), [site])
+  const sky = useMemo(() => observer.skyAt(t), [observer, t])
+  const dsn = useMemo(() => {
+    const points = stationSkyPoints(site, t, sky.earth)
+    return dsnStatus(t, (station) => siteSeesStation(points.get(station.id), observer.skyline.at))
+      .map((st) => ({ ...st, skyPoint: points.get(st.station.id) }))
+  }, [observer, site, sky, t])
+  const [tracking, setTracking] = useState<'sun' | 'earth' | null>('earth')
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const host = hostRef.current
     if (!host) return
 
     setSeeThrough(false)
     setFov(70)
     const scene = new THREE.Scene()
+    const skylineMask = createSkylineMask(site)
     scene.background = new THREE.Color(0x010206)
 
     const camera = new THREE.PerspectiveCamera(70, 1, 0.00001, 2_000)
@@ -253,8 +259,7 @@ export default function SkyView({ site, t, panel }: Props) {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     host.appendChild(renderer.domElement)
 
-    // Ground: the lower half of a sphere. Everything under y = 0 is inside it,
-    // so a Sun or Earth below the horizon is occluded instead of drawn.
+    // Textured foreground; the scientific skyline, not its mesh, masks bodies.
     const sphereGeometry = new THREE.SphereGeometry(1, 32, 24)
     // Illustrative regolith, not a map of the selected landing site.
     const groundCanvas = document.createElement('canvas')
@@ -291,7 +296,9 @@ export default function SkyView({ site, t, panel }: Props) {
     groundTexture.repeat.set(4, 4)
     groundTexture.anisotropy = renderer.capabilities.getMaxAnisotropy()
     // A closed lower sky hemisphere cannot be near-clipped or expose a plane edge.
-    const groundGeometry = new THREE.SphereGeometry(GROUND_RADIUS, 96, 64, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2)
+    // Full backdrop, clipped per ray to the same horizon used by the model.
+    // A fixed lower hemisphere incorrectly hides bodies below the tangent plane.
+    const groundGeometry = new THREE.SphereGeometry(GROUND_RADIUS, 96, 64)
     // Project onto a disk using angular distance from nadir. Unlike sphere UVs,
     // this has no longitude seam or collapsed texture coordinates at the pole.
     const position = groundGeometry.getAttribute('position')
@@ -309,6 +316,7 @@ export default function SkyView({ site, t, panel }: Props) {
       map: groundTexture, roughness: 1, metalness: 0, side: THREE.BackSide, transparent: true,
     })
     const ground = new THREE.Mesh(groundGeometry, groundMaterial)
+    applySkylineMask(groundMaterial, skylineMask, true)
     ground.renderOrder = 10
     scene.add(ground)
 
@@ -324,6 +332,9 @@ export default function SkyView({ site, t, panel }: Props) {
     const glowTexture = makeGlowTexture()
 
     const sun = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({ color: 0xfff6d8 }))
+    sun.material.transparent = true
+    sun.material.depthTest = false
+    applySkylineMask(sun.material, skylineMask)
     const sunGlow = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: glowTexture,
@@ -335,10 +346,15 @@ export default function SkyView({ site, t, panel }: Props) {
     )
     const sunGroup = new THREE.Group()
     sunGroup.add(sun, sunGlow)
+    sunGroup.renderOrder = 20
+    sunGlow.visible = false // No atmospheric halo that can leak across a ridge.
     scene.add(sunGroup)
 
     // Real Earth: textured globe, oriented from the ephemeris every update.
     const earthMaterial = makeEarthMaterial()
+    earthMaterial.transparent = true
+    earthMaterial.depthTest = false
+    applySkylineMask(earthMaterial, skylineMask)
     const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), earthMaterial)
     const earthGlow = new THREE.Sprite(
       new THREE.SpriteMaterial({
@@ -361,12 +377,17 @@ export default function SkyView({ site, t, panel }: Props) {
         new THREE.SphereGeometry(0.035, 16, 12),
         new THREE.MeshBasicMaterial({ color: LINK_COLOR['moon-down'] }),
       )
+      dot.material.transparent = true
+      dot.material.depthTest = false
+      dot.renderOrder = 21
+      applySkylineMask(dot.material, skylineMask)
       dot.position.copy(local)
       const label = makeLabel(station.name)
       label.position
         .copy(earthLocal(earthFixedUnit(station.lat, station.lon), 1.0))
         .add(new THREE.Vector3(0, 0.14, 0))
       label.visible = false
+      label.renderOrder = 22
       earth.add(dot, label)
       stationDots.set(station.id, dot)
       stationLabels.push(label)
@@ -375,6 +396,8 @@ export default function SkyView({ site, t, panel }: Props) {
     const labelNormals = DSN_STATIONS.map((st) => earthLocal(earthFixedUnit(st.lat, st.lon), 1))
     const earthGroup = new THREE.Group()
     earthGroup.add(earth, earthGlow)
+    earthGroup.renderOrder = 20
+    earthGlow.visible = false
     scene.add(earthGroup)
 
     // Best fixed-panel marker: cyan ring at the normal, an arc from the zenith
@@ -412,8 +435,10 @@ export default function SkyView({ site, t, panel }: Props) {
     const yaw = { current: 0 }
     const pitch = { current: 0 }
     let aimedFor = ''
+    let follow: 'sun' | 'earth' | null = 'earth'
 
     let terrain: ReturnType<typeof createLunarTerrain> | null = null
+    let latestViewSite = site
     let terrainDisposed = false
     setTerrainStatus('Loading NASA terrain…')
     const terrainMap = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}moon-terrain-4k.jpg`, () => { dirty = true })
@@ -426,6 +451,8 @@ export default function SkyView({ site, t, panel }: Props) {
         if (terrainDisposed) return
         if (!grid) throw new Error('Elevation unavailable')
         terrain = createLunarTerrain(grid, site, terrainMap)
+        terrain.position.y = -((latestViewSite.mastHeightM ?? 0) - (site.mastHeightM ?? 0)) / 10_000
+        applySkylineMask(terrain.material, skylineMask, true)
         terrain.material.opacity = groundMaterial.opacity
         terrain.material.depthWrite = groundMaterial.depthWrite
         terrain.traverse(object => {
@@ -439,7 +466,7 @@ export default function SkyView({ site, t, panel }: Props) {
     let latestSample: SkySample | null = null
     let dirty = true
     const zoom = (value: number) => {
-      camera.fov = clamp(value, 10, 90)
+      camera.fov = clamp(value, SKY_FOV_MIN, SKY_FOV_MAX)
       camera.updateProjectionMatrix()
       setFov(camera.fov)
       dirty = true
@@ -458,13 +485,26 @@ export default function SkyView({ site, t, panel }: Props) {
           })
         }
         setSeeThrough(enabled)
+        skylineMask.uniforms.uSkyCutaway.value = enabled ? 1 : 0
+        if (latestSample) {
+          sun.visible = enabled || latestSample.sunlit
+          earth.visible = enabled || latestSample.earthVisible
+        }
         dirty = true
       }
       else if (action === 'in') zoom(camera.fov / 1.25)
       else if (action === 'out') zoom(camera.fov * 1.25)
-      else if (action === 'reset') zoom(70)
+      else if (action === 'reset') zoom(FOV_WIDE)
       else if (latestSample) {
+        const sameTarget = follow === action
+        follow = action
+        setTracking(action)
         const target = latestSample[action]
+        const visible = action === 'sun' ? latestSample.sunlit : latestSample.earthVisible
+        const framingFov = focusZoomFieldOfView(camera.fov, target.angularDiameterDeg, camera.aspect, visible, sameTarget)
+        // Switching bodies reframes their different apparent sizes. Re-focusing
+        // the same body keeps any closer zoom the user has already selected.
+        if (framingFov !== null) zoom(framingFov)
         yaw.current = -target.azimuth * RAD
         pitch.current = clamp(target.elevation, PITCH_MIN_DEG, PITCH_MAX_DEG) * RAD
         dirty = true
@@ -476,8 +516,7 @@ export default function SkyView({ site, t, panel }: Props) {
     }
     host.addEventListener('wheel', onWheel, { passive: false })
     let raf = 0
-    const draw = () => {
-      raf = requestAnimationFrame(draw)
+    const renderFrame = () => {
       if (!dirty) return
       dirty = false
       camera.rotation.set(pitch.current, yaw.current, 0)
@@ -490,6 +529,10 @@ export default function SkyView({ site, t, panel }: Props) {
       }
       renderer.render(scene, camera)
     }
+    const draw = () => {
+      raf = requestAnimationFrame(draw)
+      renderFrame()
+    }
     raf = requestAnimationFrame(draw)
 
     const aimAt = (azimuth: number, elevation: number) => {
@@ -497,8 +540,13 @@ export default function SkyView({ site, t, panel }: Props) {
       pitch.current = clamp(elevation, PITCH_MIN_DEG, PITCH_MAX_DEG) * RAD
     }
 
-    updateRef.current = (sample, siteId, axes, stations) => {
+    updateRef.current = (sample, viewSite, axes, stations) => {
       latestSample = sample
+      latestViewSite = viewSite
+      skylineMask.update(viewSite)
+      if (terrain) terrain.position.y = -((viewSite.mastHeightM ?? 0) - (site.mastHeightM ?? 0)) / 10_000
+      sun.visible = skylineMask.uniforms.uSkyCutaway.value > 0 || sample.sunlit
+      earth.visible = skylineMask.uniforms.uSkyCutaway.value > 0 || sample.earthVisible
       const sunRadius = bodyRadius(sample.sun.angularDiameterDeg)
       const earthRadius = bodyRadius(sample.earth.angularDiameterDeg)
 
@@ -526,23 +574,32 @@ export default function SkyView({ site, t, panel }: Props) {
       )
       for (const st of stations) {
         const dot = stationDots.get(st.station.id)
-        if (dot) (dot.material as THREE.MeshBasicMaterial).color.setHex(LINK_COLOR[st.state])
+        if (dot) {
+          dot.visible = st.skyPoint?.facing ?? false
+          const material = dot.material as THREE.MeshBasicMaterial
+          material.color.setHex(LINK_COLOR[st.state])
+        }
       }
 
       // No atmosphere and no scattering: the ground is lit by the Sun only.
-      sunLight.intensity = 0.15 + 1.15 * Math.max(0, Math.sin(sample.sun.elevation * RAD))
+      sunLight.intensity = sample.sunlit ? (sample.sun.visibleFraction ?? 0) * 1.3 : 0
       sunLight.position.copy(
-        skyVector(sample.sun.azimuth, clamp(sample.sun.elevation, 2, 90), GROUND_RADIUS),
+        skyVector(sample.sun.azimuth, sample.sun.elevation, GROUND_RADIUS),
       )
       lightTarget.position.set(0, 0, 0)
 
       // Point the view at the Earth when it is up, otherwise at the Sun.
-      if (aimedFor !== siteId) {
-        aimedFor = siteId
-        const target = sample.earth.elevation > 0 ? sample.earth : sample.sun
+      if (aimedFor !== viewSite.id) {
+        aimedFor = viewSite.id
+        follow = sample.earthVisible ? 'earth' : 'sun'
+        setTracking(follow)
+      }
+      if (follow) {
+        const target = sample[follow]
         aimAt(target.azimuth, target.elevation)
       }
       dirty = true
+      renderFrame()
     }
 
     // Textures arrive asynchronously; redraw once they do.
@@ -610,6 +667,8 @@ export default function SkyView({ site, t, panel }: Props) {
     }
     const onPointerMove = (event: PointerEvent) => {
       if (!dragging) return
+      follow = null
+      setTracking(null)
       // Drag speed follows the zoom, so a close-up does not fly off the screen.
       const k = DRAG_RAD_PER_PX * (camera.fov / FOV_WIDE)
       yaw.current -= (event.clientX - lastX) * k
@@ -638,6 +697,7 @@ export default function SkyView({ site, t, panel }: Props) {
 
     return () => {
       terrainDisposed = true
+      skylineMask.dispose()
       terrain?.material.bumpMap?.dispose()
       terrainMap.dispose()
       controlsRef.current = () => {}
@@ -675,19 +735,11 @@ export default function SkyView({ site, t, panel }: Props) {
     }
   }, [site.lat, site.lon])
 
-  useEffect(() => {
-    const observer = createObserver(site)
-    const sample = observer.skyAt(t)
-    // Each antenna is tested at its own point on Earth's disc, not at the
-    // centre: at a polar site part of the disc can be behind a ridge.
-    const points = stationSkyPoints(site, t, sample.earth)
-    const stations = dsnStatus(t, (station) =>
-      siteSeesStation(points.get(station.id), observer.skyline.at),
-    ).map((st) => ({ ...st, skyPoint: points.get(st.station.id) }))
-    updateRef.current(sample, site.id, earthAxesInSky(site, t), stations)
-    setSky(sample)
-    setDsn(stations)
-  }, [site, t])
+  // Layout effect and immediate draw: the canvas and readouts use the same
+  // committed UTC instant, without a passive-effect/render-frame delay.
+  useLayoutEffect(() => {
+    updateRef.current(sky, site, earthAxesInSky(site, t), dsn)
+  }, [site, t, sky, dsn])
 
   useEffect(() => {
     updatePanelRef.current(panel ?? null)
@@ -720,12 +772,12 @@ export default function SkyView({ site, t, panel }: Props) {
           </div>
         )}
       <div className="sky-controls" aria-label="Sky camera controls">
-        <button onClick={() => controlsRef.current('sun')} title="Look toward the Sun, including when below the horizon">Focus Sun</button>
-        <button onClick={() => controlsRef.current('earth')} title="Look toward Earth, including when below the horizon">Focus Earth</button>
+        <button aria-pressed={tracking === 'sun'} onClick={() => controlsRef.current('sun')} title="Centre and follow the Sun; zoom in only when it clears the skyline">Focus Sun</button>
+        <button aria-pressed={tracking === 'earth'} onClick={() => controlsRef.current('earth')} title="Centre and follow Earth; zoom in only when it clears the skyline">Focus Earth</button>
         <button aria-pressed={seeThrough} onClick={() => controlsRef.current('terrain')}>{seeThrough ? 'Restore ground' : 'See through ground'}</button>
-        <button aria-label="Zoom in" disabled={fov <= 10} onClick={() => controlsRef.current('in')}>+</button>
-        <button aria-label="Zoom out" disabled={fov >= 90} onClick={() => controlsRef.current('out')}>−</button>
-        <button aria-label="Reset zoom" onClick={() => controlsRef.current('reset')}>{(70 / fov).toFixed(1)}×</button>
+        <button aria-label="Zoom in" disabled={fov <= SKY_FOV_MIN} onClick={() => controlsRef.current('in')}>+</button>
+        <button aria-label="Zoom out" disabled={fov >= SKY_FOV_MAX} onClick={() => controlsRef.current('out')}>−</button>
+        <button aria-label={`Reset zoom, currently ${skyMagnification(fov).toFixed(1)} times`} title="Restore the wide sky view" onClick={() => controlsRef.current('reset')}>{skyMagnification(fov).toFixed(1)}×</button>
       </div>
       {seeThrough && <div className="sky-cutaway" role="status">
         <strong>See-through ground · illustration only</strong>
@@ -739,8 +791,8 @@ export default function SkyView({ site, t, panel }: Props) {
               1,
             )}° towards ${compassPoint16(site.horizon.maxAzimuthDeg)})`
           : ' · visibility currently uses a flat geometric horizon'}{' '}
-        · Scroll to zoom · Angular sizes exaggerated ×{SIZE_BOOST} (minimum {MIN_SIZE_DEG}°), not to
-        scale
+        · True angular sizes; scroll to zoom · {tracking ? `Following ${tracking === 'sun' ? 'Sun' : 'Earth'} through mission time` : 'Free camera: a visible body may be outside the frame; use Focus Sun or Focus Earth'}
+        {' · '}Regional foreground is illustrative; the rendered skyline uses the visibility profile.
       </p>
       </div>
       {dsn.length > 0 && (

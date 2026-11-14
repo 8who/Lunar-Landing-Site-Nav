@@ -206,7 +206,8 @@ export default function ExplorerMode({
   const earthHorizon = sky.earth.horizonDeg ?? -flatDip
   const sunClearance = sky.sun.elevation - sunHorizon
   const earthClearance = sky.earth.elevation - earthHorizon
-  const sunPartial = sunUp && sunClearance < sky.sun.angularDiameterDeg / 2
+  const sunPartial = sunUp && (sky.sun.visibleFraction ?? 1) < 1
+  const earthPartial = earthUp && (sky.earth.visibleFraction ?? 1) < 1
   const terrainCritical = isTerrainCritical(site)
   const earthDegrees = Math.max(0, earthClearance).toFixed(1)
   const sunDegrees = Math.max(0, sunClearance).toFixed(1)
@@ -254,11 +255,13 @@ export default function ExplorerMode({
           <div className="verdict-body">
             <div className="verdict-top">
               <h3>Earth</h3>
-              <span className="verdict-state">{earthUp ? 'Visible' : 'Not visible'}</span>
+              <span className="verdict-state">{earthUp ? earthPartial ? 'Partly visible' : 'Visible' : 'Not visible'}</span>
             </div>
             <p>
               {earthUp
-                ? `Earth is ${earthDegrees}° above the local skyline, so there is a clear line of sight.`
+                ? earthPartial
+                  ? 'Only part of Earth clears the terrain skyline. Check the DSN station list for an actual antenna link.'
+                  : `Earth is ${earthDegrees}° above the local skyline. This is geometric visibility; check DSN stations for an antenna link.`
                 : sky.earth.elevation > 0
                   ? 'Earth is up, but the terrain skyline hides it, so there is no direct line of sight.'
                   : `Earth is ${Math.abs(sky.earth.elevation).toFixed(

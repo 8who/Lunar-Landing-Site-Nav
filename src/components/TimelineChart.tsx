@@ -11,6 +11,8 @@ interface Props {
   onPick?: (sample: SkySample) => void
   /** Moment pinned by a click; kept on screen while nothing is hovered. */
   pinned?: SkySample | null
+  /** Exact active instant, shared with the first-person view (not a nearby sample). */
+  active?: SkySample | null
 }
 
 const W = 1000
@@ -33,6 +35,7 @@ export default function TimelineChart({
   onHover,
   onPick,
   pinned,
+  active,
 }: Props) {
   const svgRef = useRef<SVGSVGElement | null>(null)
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
@@ -129,7 +132,7 @@ export default function TimelineChart({
 
   const hovered = hoverIdx !== null ? samples[hoverIdx] : null
   // Once the pointer leaves, the clicked moment stays on screen.
-  const marker = hovered ?? pinned ?? null
+  const marker = active ?? hovered ?? pinned ?? null
 
   const sampleAt = (clientX: number): { sample: SkySample; index: number } | null => {
     const svg = svgRef.current
@@ -277,7 +280,7 @@ export default function TimelineChart({
               <rect width={226} height={104} rx={8} className="tooltip-box" />
               <text x={10} y={18} className="tooltip-time">
                 {formatUtc(marker.t)}
-                {hovered ? '' : ' · pinned'}
+                {hovered ? '' : pinned ? ' · pinned' : ' · selected instant'}
               </text>
               <circle cx={14} cy={36} r={3} className="dot-sun" />
               <text x={24} y={40} className="tooltip-line">
@@ -293,7 +296,7 @@ export default function TimelineChart({
               </text>
               <text x={10} y={80} className="tooltip-sub">
                 {marker.sunlit ? 'Sunlit' : 'In shadow'} ·{' '}
-                {marker.earthVisible ? 'D2E link open' : 'Earth below skyline'}
+                {marker.earthVisible ? 'Earth geometrically visible' : 'Earth below skyline'}
               </text>
               <text x={10} y={96} className="tooltip-sub">
                 Earth dist. {(marker.earth.distanceKm / 1000).toFixed(0)}k km
@@ -322,7 +325,7 @@ export default function TimelineChart({
           </span>
           <span>
             {marker.sunlit ? '☀ in sunlight' : '☾ in shadow'} ·{' '}
-            {marker.earthVisible ? '📡 Earth link open' : '📡 Earth below skyline'}
+            {marker.earthVisible ? 'Earth geometrically visible' : 'Earth below skyline'}
           </span>
         </div>
       )}

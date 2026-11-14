@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { elevationAt } from '../lib/astro/terrain'
+import { elevationAt, isotropicGrid } from '../lib/astro/terrain'
 import type { LunarSite } from '../lib/astro/types'
 
 /** Seamless, illustrative fine regolith; regional features still come from LOLA. */
@@ -37,6 +37,7 @@ function makeSurfaceDetail() {
 
 /** Regional terrain patch, 300 km across; scene scale 0.1 units per km. */
 export function createLunarTerrain(grid: Float32Array, site: LunarSite, map: THREE.Texture) {
+  grid = isotropicGrid(grid)
   const rad = Math.PI / 180, lat = site.lat * rad, lon = site.lon * rad
   const up = new THREE.Vector3(Math.cos(lat)*Math.cos(lon), Math.cos(lat)*Math.sin(lon), Math.sin(lat))
   const east = new THREE.Vector3(-Math.sin(lon), Math.cos(lon), 0)
@@ -66,7 +67,7 @@ export function createLunarTerrain(grid: Float32Array, site: LunarSite, map: THR
     const latitude = Math.asin(direction.z) / rad, longitude = Math.atan2(direction.y,direction.x) / rad
     const point = direction.multiplyScalar(1737.4 + elevationAt(grid,latitude,longitude)).addScaledVector(up,-base)
     return { latitude, longitude, position: new THREE.Vector3(point.dot(east)*0.1,
-      (point.dot(up)+detailHeight(e,n)-originDetail)*0.1-0.0002, -point.dot(north)*0.1) }
+      (point.dot(up)+detailHeight(e,n)-originDetail-(site.mastHeightM ?? 0)/1000)*0.1-0.0002, -point.dot(north)*0.1) }
   }
   for (let i = 0; i < positions.count; i++) {
     const warp = (v: number) => Math.sign(v) * Math.pow(Math.abs(v)/150,3) * 150
