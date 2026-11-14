@@ -407,7 +407,7 @@ export default function SkyView({ site, t, panel }: Props) {
     let terrainDisposed = false
     const abortTerrain = new AbortController()
     setTerrainStatus('Loading NASA terrain…')
-    const terrainMap = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}moon.jpg`, () => { dirty = true })
+    const terrainMap = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}moon-terrain-4k.jpg`, () => { dirty = true })
     terrainMap.colorSpace = THREE.SRGBColorSpace
     terrainMap.wrapS = THREE.RepeatWrapping
     terrainMap.anisotropy = renderer.capabilities.getMaxAnisotropy()
@@ -419,8 +419,12 @@ export default function SkyView({ site, t, panel }: Props) {
         terrain = createLunarTerrain(new Float32Array(buffer), site, terrainMap)
         terrain.material.opacity = groundMaterial.opacity
         terrain.material.depthWrite = groundMaterial.depthWrite
+        terrain.traverse(object => {
+          const material = (object as THREE.Mesh).material as THREE.Material | undefined
+          if (material && !Array.isArray(material)) { material.opacity = groundMaterial.opacity; material.depthWrite = groundMaterial.depthWrite }
+        })
         scene.add(terrain)
-        setTerrainStatus('NASA LRO / LOLA terrain · 4 pixels/degree · regional detail')
+        setTerrainStatus('NASA LRO / LOLA regional terrain · rocks and foreground relief illustrative')
         dirty = true
       }).catch(() => { if (!terrainDisposed) setTerrainStatus('Terrain unavailable · illustrative ground fallback') })
     let latestSample: SkySample | null = null
@@ -439,6 +443,10 @@ export default function SkyView({ site, t, panel }: Props) {
         if (terrain) {
           terrain.material.opacity = enabled ? 0.18 : 1
           terrain.material.depthWrite = !enabled
+          terrain.traverse(object => {
+            const material = (object as THREE.Mesh).material as THREE.Material | undefined
+            if (material && !Array.isArray(material)) { material.opacity = enabled ? 0.18 : 1; material.depthWrite = !enabled }
+          })
         }
         setSeeThrough(enabled)
         dirty = true
@@ -622,6 +630,7 @@ export default function SkyView({ site, t, panel }: Props) {
     return () => {
       terrainDisposed = true
       abortTerrain.abort()
+      terrain?.material.bumpMap?.dispose()
       terrainMap.dispose()
       controlsRef.current = () => {}
       host.removeEventListener('wheel', onWheel)

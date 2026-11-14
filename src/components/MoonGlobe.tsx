@@ -125,19 +125,26 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     // and inherits the globe tilt, ending up world-vertical. It pokes out past
     // the surface so the poles are readable from any angle; depth testing hides
     // the half behind the sphere.
-    const axisLength = RADIUS * 1.35
-    const axisGeometry = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, -axisLength),
-      new THREE.Vector3(0, 0, axisLength),
-    ])
-    const axisMaterial = new THREE.LineBasicMaterial({
-      color: 0x9fd8ff,
-      transparent: true,
-      opacity: 0.4,
-      depthWrite: false,
-    })
-    const rotationAxis = new THREE.Line(axisGeometry, axisMaterial)
-    globe.add(rotationAxis)
+    const axisLength = RADIUS * 1.5
+    const axisGroup = new THREE.Group()
+    const axisMaterial = new THREE.MeshBasicMaterial({ color: 0x8fe0ff, transparent: true, opacity: 0.95, depthWrite: false })
+    const axisTube = new THREE.Mesh(new THREE.CylinderGeometry(RADIUS*0.009, RADIUS*0.009, axisLength*2, 16), axisMaterial)
+    axisTube.rotation.x = Math.PI / 2
+    axisGroup.add(axisTube)
+    const labels: {texture: THREE.CanvasTexture; sprite: THREE.Sprite}[] = []
+    const addPole = (text: string, color: string, z: number) => {
+      const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 80
+      const ctx = canvas.getContext('2d')!
+      ctx.font = '600 32px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.strokeStyle = 'rgba(5,12,22,0.82)'; ctx.lineWidth = 7; ctx.strokeText(text,128,40)
+      ctx.fillStyle = color; ctx.fillText(text,128,40)
+      const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:texture,depthTest:false,depthWrite:false}))
+      sprite.position.z = z; sprite.scale.set(RADIUS*0.44,RADIUS*0.13,1); axisGroup.add(sprite); labels.push({texture,sprite})
+    }
+    addPole('NORTH','#9fe5ff',axisLength*0.74)
+    addPole('SOUTH','#ffd18a',-axisLength*0.74)
+    globe.add(axisGroup)
 
     // Drag rotates this wrapper, never the globe itself: the mapping from a
     // clicked point to lat/lon stays in the sphere's own frame.
@@ -327,6 +334,13 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     host.addEventListener('pointermove', onPointerMove)
     host.addEventListener('pointerup', onPointerUp)
     host.addEventListener('pointercancel', onPointerUp)
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault()
+      camera.position.z = Math.max(1.35, Math.min(5.5, camera.position.z * Math.exp(event.deltaY * 0.001)))
+      camera.updateProjectionMatrix()
+      dirty = true
+    }
+    host.addEventListener('wheel', onWheel, { passive: false })
 
     // Selecting a site far from the current centre swings it into view.
     focusRef.current = (site) => {
@@ -361,14 +375,15 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       host.removeEventListener('pointermove', onPointerMove)
       host.removeEventListener('pointerup', onPointerUp)
       host.removeEventListener('pointercancel', onPointerUp)
+      host.removeEventListener('wheel', onWheel)
       markersRef.current = () => {}
       focusRef.current = () => {}
       markers.geometry.dispose()
       markers.material.dispose()
       markers.parent?.remove(markers)
-      axisGeometry.dispose()
-      axisMaterial.dispose()
-      rotationAxis.parent?.remove(rotationAxis)
+      axisGroup.traverse((o) => { const mesh = o as THREE.Mesh; if (mesh.geometry) mesh.geometry.dispose(); if ((o as THREE.Sprite).isSprite) ((o as THREE.Sprite).material as THREE.SpriteMaterial).dispose() })
+      labels.forEach(label => label.texture.dispose())
+      axisGroup.parent?.remove(axisGroup)
       geometry.dispose()
       // Dispose whichever map is bound: the real one if it loaded, else the
       // procedural fallback. A late load disposes itself via `disposed`.
