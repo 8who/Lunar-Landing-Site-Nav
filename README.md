@@ -54,6 +54,8 @@ export.
 | Power | Visible-disc fraction × incidence × (1 AU / r)², for a **vertical Sun-tracking array** (cos e, polar-lander practice) and a flat panel (sin e). A flat panel at the pole gets ~1% of the solar constant; a vertical one ~50% |
 | Fixed panel | Score = integral of max(0, normal · Sun) over the range, relative to a perfect two-axis Sun-tracking panel; searched on a 1° tilt × 10° azimuth grid |
 | Polar caveat | Sites at \|lat\| ≥ 80° are flagged: there the flat-horizon numbers are a first guess, terrain dominates |
+| Earth in the sky | Textured 3D globe (NASA Blue Marble day / Black Marble night, live terminator), oriented from Greenwich sidereal time + precession/nutation into the lunar site frame; validated against the sub-lunar point to < 0.4° |
+| DSN link | Goldstone DSS-14, Madrid DSS-63, Canberra DSS-43: a complex can talk to the site when the site sees Earth and the Moon is ≥ 10° above the station's horizon. ~98% coverage of the Moon over a year, with daily gaps up to ~80 min |
 | Windows | Boolean scan + bisection refinement of every horizon crossing (~1 s) |
 
 Earth's direction from the Moon is simply `-r_moon` rotated into the body-fixed

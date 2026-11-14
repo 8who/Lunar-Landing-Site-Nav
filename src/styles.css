@@ -775,6 +775,81 @@ button {
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
 }
 
+/* Sky view: Deep Space Network status and zoom */
+.dsn-list {
+  display: grid;
+  gap: 3px;
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--glass);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.dsn-row {
+  margin: 0;
+}
+.dsn-row strong {
+  font-weight: 600;
+}
+.dsn-title {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.dsn-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.dsn-row i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.dsn-row.dsn-link {
+  color: var(--ok);
+}
+.dsn-row.dsn-low,
+.dsn-row.dsn-site-blind {
+  color: var(--sun);
+}
+.sky-zoom {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(4, 6, 13, 0.7);
+}
+.sky-zoom button {
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 10px;
+  font: inherit;
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+.sky-zoom button.active {
+  color: var(--text);
+  background: var(--glass-strong);
+}
+.sky-zoom button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* ============================================================
    Ranking
    ============================================================ */
@@ -1628,3 +1703,4 @@ button {
   font-size: 0.82rem;
   line-height: 1.4;
 }
+
