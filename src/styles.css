@@ -1643,3 +1643,19 @@ button {
 .mission-actions button:disabled { opacity: .4; cursor: not-allowed; }
 .mission-assumption { margin-bottom: 0; }
 @media (max-width: 900px) { .explorer { grid-template-areas: "sites" "hero" "side" "controls" "mission"; } }
+
+.sky-controls { position: absolute; right: 12px; top: 72px; display: flex; gap: 5px; flex-wrap: wrap; max-width: calc(100% - 24px); z-index: 2; }
+.sky-controls button { min-width: 34px; height: 32px; padding: 0 9px; background: rgba(7,12,22,.9); font-size: 12px; }
+.sky-controls button:disabled { opacity: .4; cursor: not-allowed; }
+.sky-caption { left: 12px; font-size: 10px; }
+
+/* Keep camera actions legible and separate from the sky readouts. */
+.sky-view, .explorer-sky .sky-view { min-height: 440px; }
+.sky-controls { top: 10px; left: 10px; right: 10px; max-width: none; padding: 8px; border: 1px solid #52627c; border-radius: 10px; background: #101929; gap: 6px; }
+.sky-controls button { height: 36px; color: #f3f7ff; border: 1px solid #6b7d98; font-weight: 600; background: #24344d; }
+.sky-controls button:hover, .sky-controls button[aria-pressed="true"] { background: #375779; border-color: #9ddfff; }
+.sky-controls button:focus-visible { outline: 2px solid #ffce70; outline-offset: 2px; }
+.sky-overlay { top: 116px; right: 12px; font-size: 11px; }
+.sky-cutaway { position: absolute; bottom: 54px; left: 12px; right: 12px; display: grid; gap: 3px; padding: 10px 12px; color: #ffe0a4; background: #241b10ed; border: 1px solid #c89542; border-radius: 8px; font-size: 11px; pointer-events: none; }
+.sky-caption { bottom: 8px; right: 12px; line-height: 1.5; }
+@media(max-width: 420px) { .sky-overlay { top: 156px; } .sky-view, .explorer-sky .sky-view { min-height: 480px; } }
