@@ -29,6 +29,17 @@ what you were looking at.
 
 - **Moon globe** (NASA SVS / LRO imagery) with the lunar rotation axis drawn on
   it; drag to spin, click anywhere to drop the site there.
+- **Named site markers**: round, outlined points with hover names and exact
+  catalogue selection. Only the selected marker is shown; **Browse all sites**
+  restores the catalogue, with a keyboard/touch picker for overlapping points.
+- **Alternatives**: up to three comparable sites beneath the globe in both modes.
+  Resource and calendar results carry their search criteria and dates into the
+  comparison. Otherwise, sites in the same category must be within 20 percentage
+  points of the selected site's sunlight, Earth visibility and joint availability.
+  The list uses the current mast and 1 h sampling; it can contain fewer than three
+  matches. Saved criteria are labeled and can be cleared to use the current range.
+  Jumping to an operation window also carries its start and duration: alternatives
+  must have 100% modeled simultaneous visibility throughout that same interval.
 - **30-day lunar-cycle scrubber**: one slider through a full day/night cycle,
   plus the UTC day.
 - **Plain-language verdict**: whether the site has Sun, Earth, both, and when the

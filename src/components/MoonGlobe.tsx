@@ -1,12 +1,14 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { lunarVector, vectorToLatLon, yawToFaceLon } from '../lib/astro/globeMath'
 import type { LunarSite } from '../lib/astro/types'
+import { markerAtPointer } from './globeMarkers'
 
 interface Props {
   sites: LunarSite[]
   selected: LunarSite | null
   onPick: (lat: number, lon: number) => void
+  onSelectSite: (site: LunarSite) => void
 }
 
 const DEG = 180 / Math.PI
@@ -72,15 +74,20 @@ function makeMoonTexture(): THREE.CanvasTexture {
   return texture
 }
 
-export default function MoonGlobe({ sites, selected, onPick }: Props) {
+export default function MoonGlobe({ sites, selected, onPick, onSelectSite }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
   const markersRef = useRef<(list: LunarSite[], selectedId: string | null) => void>(() => {})
   const focusRef = useRef<(site: LunarSite) => void>(() => {})
   const pickRef = useRef(onPick)
+  const selectRef = useRef(onSelectSite)
+  const [showAll, setShowAll] = useState(false)
+  const [hover, setHover] = useState<{ site: LunarSite; x: number; y: number } | null>(null)
 
   useEffect(() => {
     pickRef.current = onPick
-  }, [onPick])
+    selectRef.current = onSelectSite
+  }, [onPick, onSelectSite])
+  useEffect(() => { setShowAll(false); setHover(null) }, [selected?.id, selected?.lat, selected?.lon])
 
   useEffect(() => {
     const host = hostRef.current
@@ -109,14 +116,25 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     globe.rotation.x = -Math.PI / 2
     globe.add(sphere)
 
+    const markerCanvas = document.createElement('canvas')
+    markerCanvas.width = markerCanvas.height = 64
+    const markerContext = markerCanvas.getContext('2d')!
+    markerContext.fillStyle = getComputedStyle(host).getPropertyValue('--site-marker-outline').trim()
+    markerContext.beginPath(); markerContext.arc(32, 32, 30, 0, Math.PI * 2); markerContext.fill()
+    markerContext.fillStyle = 'white'
+    markerContext.beginPath(); markerContext.arc(32, 32, 22, 0, Math.PI * 2); markerContext.fill()
+    const markerTexture = new THREE.CanvasTexture(markerCanvas)
+    markerTexture.colorSpace = THREE.SRGBColorSpace
     const markers = new THREE.Points(
       new THREE.BufferGeometry(),
       new THREE.PointsMaterial({
-        size: 6,
+        size: 14,
         sizeAttenuation: false,
         vertexColors: true,
         transparent: true,
         depthWrite: false,
+        map: markerTexture,
+        alphaTest: .4,
       }),
     )
     globe.add(markers)
@@ -127,24 +145,42 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     // the half behind the sphere.
     const axisLength = RADIUS * 1.5
     const axisGroup = new THREE.Group()
-    const axisMaterial = new THREE.MeshBasicMaterial({ color: 0x8fe0ff, transparent: true, opacity: 0.95, depthWrite: false })
+    const poleStyle = getComputedStyle(host)
+    const axisMaterial = new THREE.MeshBasicMaterial({ color: poleStyle.getPropertyValue('--pole-axis').trim(), transparent: true, opacity: 0.95, depthWrite: false })
     const axisTube = new THREE.Mesh(new THREE.CylinderGeometry(RADIUS*0.009, RADIUS*0.009, axisLength*2, 16), axisMaterial)
     axisTube.rotation.x = Math.PI / 2
     axisGroup.add(axisTube)
-    const labels: {texture: THREE.CanvasTexture; sprite: THREE.Sprite}[] = []
+    const labels: {texture: THREE.CanvasTexture; sprite: THREE.Sprite; redraw: () => void}[] = []
     const addPole = (text: string, color: string, z: number) => {
       const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 80
       const ctx = canvas.getContext('2d')!
-      ctx.font = '600 32px -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
-      ctx.strokeStyle = 'rgba(5,12,22,0.82)'; ctx.lineWidth = 7; ctx.strokeText(text,128,40)
-      ctx.fillStyle = color; ctx.fillText(text,128,40)
       const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace
+      const redraw = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        ctx.font = '500 34px "Source Sans 3", sans-serif'
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.lineJoin = 'round'
+        ctx.strokeStyle = 'rgba(16,18,15,0.92)'
+        ctx.lineWidth = 4
+        ctx.strokeText(text, 128, 40)
+        ctx.fillStyle = color
+        ctx.fillText(text, 128, 40)
+        texture.needsUpdate = true
+      }
+      redraw()
       const sprite = new THREE.Sprite(new THREE.SpriteMaterial({map:texture,depthTest:false,depthWrite:false}))
-      sprite.position.z = z; sprite.scale.set(RADIUS*0.44,RADIUS*0.13,1); axisGroup.add(sprite); labels.push({texture,sprite})
+      sprite.position.z = z; sprite.scale.set(RADIUS*0.44,RADIUS*0.13,1); axisGroup.add(sprite); labels.push({texture,sprite,redraw})
     }
-    addPole('NORTH','#9fe5ff',axisLength*0.74)
-    addPole('SOUTH','#ffd18a',-axisLength*0.74)
+    addPole('North',poleStyle.getPropertyValue('--pole-north').trim(),axisLength*0.74)
+    addPole('South',poleStyle.getPropertyValue('--pole-south').trim(),-axisLength*0.74)
     globe.add(axisGroup)
+    // Canvas text does not automatically repaint when the bundled font arrives.
+    document.fonts.load('500 34px "Source Sans 3"').then(() => {
+      if (disposed) return
+      labels.forEach(label => label.redraw())
+      dirty = true
+    }).catch(() => {})
 
     // Drag rotates this wrapper, never the globe itself: the mapping from a
     // clicked point to lat/lon stays in the sphere's own frame.
@@ -226,11 +262,14 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       },
     )
 
+    let visibleSites: LunarSite[] = []
     markersRef.current = (list, selectedId) => {
+      visibleSites = list
+      setHover(null)
       const positions = new Float32Array(list.length * 3)
       const colors = new Float32Array(list.length * 3)
-      const passive = new THREE.Color(0x9fd8ff)
-      const active = new THREE.Color(0xffb547)
+      const passive = new THREE.Color(poleStyle.getPropertyValue('--site-marker').trim())
+      const active = new THREE.Color(poleStyle.getPropertyValue('--site-selected').trim())
       list.forEach((site, index) => {
         const v = lunarVector(site.lat, site.lon, RADIUS * 1.006)
         positions[index * 3] = v.x
@@ -277,9 +316,21 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
 
     const raycaster = new THREE.Raycaster()
     const pointer = new THREE.Vector2()
+    const markerAt = (clientX: number, clientY: number) => {
+      scene.updateMatrixWorld(true)
+      camera.updateMatrixWorld()
+      return markerAtPointer(visibleSites, camera, globe.matrixWorld, host.getBoundingClientRect(), clientX, clientY)
+    }
     const pickAt = (clientX: number, clientY: number) => {
       const rect = host.getBoundingClientRect()
       if (rect.width === 0 || rect.height === 0) return
+      const marker = markerAt(clientX, clientY)
+      if (marker) {
+        setShowAll(false)
+        setHover(null)
+        selectRef.current(marker.site)
+        return
+      }
       pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1
       pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1
       scene.updateMatrixWorld(true)
@@ -291,6 +342,8 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       if (!hit) return
       const local = globe.worldToLocal(hit.point.clone())
       const { lat, lon } = vectorToLatLon(local.x, local.y, local.z)
+      setShowAll(false)
+      setHover(null)
       pickRef.current(lat, lon)
     }
 
@@ -299,6 +352,9 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
     let lastX = 0
     let lastY = 0
     const onPointerDown = (event: PointerEvent) => {
+      if ((event.target as Element).closest('.globe-site-controls')) return
+      setHover(null)
+      host.style.cursor = ''
       // A drag takes over from any in-flight focus animation.
       anim.active = false
       dragging = true
@@ -313,7 +369,12 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       host.classList.add('dragging')
     }
     const onPointerMove = (event: PointerEvent) => {
-      if (!dragging) return
+      if (!dragging) {
+        const hit = (event.target as Element).closest('.globe-site-controls') ? null : markerAt(event.clientX, event.clientY)
+        setHover((previous) => hit && previous?.site.id === hit.site.id && previous.x === hit.x && previous.y === hit.y ? previous : hit)
+        host.style.cursor = hit ? 'pointer' : ''
+        return
+      }
       const dx = event.clientX - lastX
       const dy = event.clientY - lastY
       moved += Math.abs(dx) + Math.abs(dy)
@@ -330,11 +391,16 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       if (host.hasPointerCapture(event.pointerId)) host.releasePointerCapture(event.pointerId)
       if (moved < CLICK_SLOP_PX) pickAt(event.clientX, event.clientY)
     }
+    const clearHover = () => { setHover(null); host.style.cursor = '' }
+    const onPointerCancel = () => { dragging = false; host.classList.remove('dragging'); clearHover() }
     host.addEventListener('pointerdown', onPointerDown)
     host.addEventListener('pointermove', onPointerMove)
     host.addEventListener('pointerup', onPointerUp)
-    host.addEventListener('pointercancel', onPointerUp)
+    host.addEventListener('pointercancel', onPointerCancel)
+    host.addEventListener('pointerleave', clearHover)
     const onWheel = (event: WheelEvent) => {
+      if ((event.target as Element).closest('.globe-site-controls')) return
+      clearHover()
       event.preventDefault()
       camera.position.z = Math.max(1.35, Math.min(5.5, camera.position.z * Math.exp(event.deltaY * 0.001)))
       camera.updateProjectionMatrix()
@@ -374,12 +440,14 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
       host.removeEventListener('pointerdown', onPointerDown)
       host.removeEventListener('pointermove', onPointerMove)
       host.removeEventListener('pointerup', onPointerUp)
-      host.removeEventListener('pointercancel', onPointerUp)
+      host.removeEventListener('pointercancel', onPointerCancel)
+      host.removeEventListener('pointerleave', clearHover)
       host.removeEventListener('wheel', onWheel)
       markersRef.current = () => {}
       focusRef.current = () => {}
       markers.geometry.dispose()
       markers.material.dispose()
+      markerTexture.dispose()
       markers.parent?.remove(markers)
       axisGroup.traverse((o) => { const mesh = o as THREE.Mesh; if (mesh.geometry) mesh.geometry.dispose(); if ((o as THREE.Sprite).isSprite) ((o as THREE.Sprite).material as THREE.SpriteMaterial).dispose() })
       labels.forEach(label => label.texture.dispose())
@@ -396,10 +464,20 @@ export default function MoonGlobe({ sites, selected, onPick }: Props) {
 
   useEffect(() => {
     // Custom picks are not part of the curated list; keep their marker visible.
-    const list = selected && !sites.some((s) => s.id === selected.id) ? [...sites, selected] : sites
+    const all = selected && !sites.some((s) => s.id === selected.id) ? [...sites, selected] : sites
+    const list = showAll || !selected ? all : [selected]
     markersRef.current(list, selected?.id ?? null)
     if (selected) focusRef.current(selected)
-  }, [sites, selected])
+  }, [sites, selected, showAll])
 
-  return <div className="moon-globe" ref={hostRef} />
+  return <div className="moon-globe" ref={hostRef} role="group" aria-label="Interactive Moon landing sites">
+    <div className="globe-site-controls">
+      <button aria-pressed={showAll} onClick={() => { setHover(null); setShowAll((value) => !value) }}>{showAll ? 'Show selected site only' : 'Browse all sites'}</button>
+      {showAll && <label><span>Choose a named site</span><select value={sites.some((site) => site.id === selected?.id) ? selected!.id : ''} onChange={(event) => {
+        const next = sites.find((site) => site.id === event.target.value)
+        if (next) { setShowAll(false); onSelectSite(next) }
+      }}><option value="" disabled>Select a landing site</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>}
+    </div>
+    {hover && <div className="globe-site-tooltip" role="tooltip" style={{ left: Math.max(110, Math.min(hover.x, (hostRef.current?.clientWidth ?? 400) - 110)), top: Math.max(80, hover.y - 14) }}><strong>{hover.site.name}</strong><span>Click to select this site</span></div>}
+  </div>
 }

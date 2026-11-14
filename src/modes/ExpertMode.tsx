@@ -5,6 +5,8 @@ import MineralSelectionPanel from '../components/MineralSelectionPanel'
 import OpportunityPanel from '../components/OpportunityPanel'
 import SkyView from '../components/SkyView'
 import MoonGlobe from '../components/MoonGlobe'
+import SiteAlternatives from '../components/SiteAlternatives'
+import type { AlternativeSearch } from '../lib/siteAlternatives'
 import { buildTimeline } from '../lib/astro/timeline'
 import { rankSites, type RankSortKey, type RankedSite } from '../lib/astro/ranking'
 import { bestFixedPanel, compassPoint16 } from '../lib/astro/panel'
@@ -25,6 +27,8 @@ export interface ExpertModeProps {
   t: number
   /** Attach the terrain skyline to a site (no-op while the grid is loading) */
   horizonFor: (site: LunarSite) => LunarSite
+  alternativeSearch: AlternativeSearch | null
+  onAlternativeSearchChange: (search: AlternativeSearch | null) => void
 }
 
 const DAY = 86_400_000
@@ -52,6 +56,8 @@ export default function ExpertMode({
   onDayChange,
   t,
   horizonFor,
+  alternativeSearch,
+  onAlternativeSearchChange,
 }: ExpertModeProps) {
   const [days, setDays] = useState(30)
   const [stepMin, setStepMin] = useState(15)
@@ -449,8 +455,7 @@ export default function ExpertMode({
               <div>
                 <h2>Pick a point on the Moon</h2>
                 <p>
-                  Drag to spin · click anywhere to make it the landing site · highlighted dot is
-                  the current site
+                  Browse round markers for exact named-site selection, or click unmarked terrain for a custom location.
                 </p>
               </div>
             </div>
@@ -458,7 +463,9 @@ export default function ExpertMode({
               sites={SITES}
               selected={site}
               onPick={(lat, lon) => onSiteChange(customSite(lat, lon))}
+              onSelectSite={onSiteChange}
             />
+            <SiteAlternatives site={site} horizonFor={horizonFor} t0={t0} t1={t1} search={alternativeSearch} onClearSearch={() => onAlternativeSearchChange(null)} onSelect={onSiteChange} />
           </section>
 
           <section className="chart-card sky-card">
@@ -484,7 +491,8 @@ export default function ExpertMode({
           </section>
         </>
       ) : view === 'resources' ? (
-        <MineralSelectionPanel rows={rankedBase} loading={rankLoading} onSelect={(next) => {
+        <MineralSelectionPanel rows={rankedBase} loading={rankLoading} onSelect={(next, criteria) => {
+          onAlternativeSearchChange({ kind: 'resources', t0, t1, ...criteria })
           onSiteChange(next)
           setView('single')
         }} />
@@ -510,6 +518,7 @@ export default function ExpertMode({
               sortBy={sortBy}
               onSort={setSortBy}
               onSelect={(next) => {
+                onAlternativeSearchChange({ kind: 'operations', t0, t1 })
                 onSiteChange(next)
                 setView('single')
               }}
@@ -521,7 +530,8 @@ export default function ExpertMode({
           sites={shortlist}
           t0={t0}
           days={days}
-          onOpen={(next, start) => {
+          onOpen={(next, start, criteria) => {
+            onAlternativeSearchChange({ kind: 'calendar', t0: start, t1: start + criteria.durationMs, constraints: criteria.constraints })
             onSiteChange(next)
             onDayChange(utcDay(start))
             setView('single')

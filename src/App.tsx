@@ -6,6 +6,7 @@ import { SITES } from './lib/astro/sites'
 import type { LunarSite } from './lib/astro/types'
 import { loadTerrainGrid } from './lib/terrainData'
 import './styles.css'
+import type { AlternativeSearch } from './lib/siteAlternatives'
 
 type Mode = 'explorer' | 'expert'
 
@@ -24,6 +25,7 @@ export default function App() {
   const [minutesOfDay, setMinutesOfDay] = useState(12 * 60)
   // Height of the solar array / antenna mast. Raising it lowers the horizon.
   const [mastHeightM, setMastHeightM] = useState(2)
+  const [alternativeSearch, setAlternativeSearch] = useState<AlternativeSearch | null>(null)
 
   // The LOLA grid powers the terrain horizon, not just the sky view. It loads
   // once; until it arrives (or if it fails) the app uses the flat model.
@@ -145,6 +147,9 @@ export default function App() {
           minutesOfDay={minutesOfDay}
           onMinutesChange={setMinutesOfDay}
           t={t}
+          horizonFor={horizonFor}
+          alternativeSearch={alternativeSearch}
+          onAlternativeSearchChange={setAlternativeSearch}
         />
       ) : (
         <ExpertMode
@@ -154,6 +159,8 @@ export default function App() {
           onDayChange={setDay}
           t={t}
           horizonFor={horizonFor}
+          alternativeSearch={alternativeSearch}
+          onAlternativeSearchChange={setAlternativeSearch}
         />
       )}
     </div>

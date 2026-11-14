@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import MissionPlanner from '../components/MissionPlanner'
 import MoonGlobe from '../components/MoonGlobe'
+import SiteAlternatives from '../components/SiteAlternatives'
+import type { AlternativeSearch } from '../lib/siteAlternatives'
 import SkyView from '../components/SkyView'
 import ArrayCard from '../components/ArrayPower'
 import { bestFixedPanel, compassPoint16 } from '../lib/astro/panel'
@@ -33,6 +35,9 @@ export interface ExplorerModeProps {
   onMinutesChange: (minutes: number) => void
   /** Shared instant, UTC epoch ms */
   t: number
+  horizonFor: (site: LunarSite) => LunarSite
+  alternativeSearch: AlternativeSearch | null
+  onAlternativeSearchChange: (search: AlternativeSearch | null) => void
 }
 
 const RAD = Math.PI / 180
@@ -91,6 +96,9 @@ export default function ExplorerMode({
   onDayChange,
   onMinutesChange,
   t,
+  horizonFor,
+  alternativeSearch,
+  onAlternativeSearchChange,
 }: ExplorerModeProps) {
   const observer = useMemo(() => createObserver(site), [site])
   const sky = useMemo(() => observer.skyAt(t), [observer, t])
@@ -232,20 +240,23 @@ export default function ExplorerMode({
             {SITES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </label>
-        <p>Choose a mission site, or click the Moon to explore any location. Drag to rotate.</p>
+        <p>Browse named markers to see their names and select an exact site, or click unmarked terrain for a custom location.</p>
       </section>
       <section className="chart-card explorer-hero">
         <MoonGlobe
           sites={SITES}
           selected={site}
           onPick={(lat, lon) => onSiteChange(customSite(lat, lon))}
+          onSelectSite={onSiteChange}
         />
         <div className="explorer-picked">
           <strong>{formatCoord(site.lat, site.lon)}</strong>
-          <span>{nearest ? nearest.name : 'Custom point'}</span>
+          <span>{site.category === 'custom' ? nearest ? `Custom point near ${nearest.name}` : 'Custom point' : site.name}</span>
         </div>
         <p className="globe-caption">Moon map: NASA&apos;s Scientific Visualization Studio / LRO</p>
       </section>
+
+      <SiteAlternatives site={site} horizonFor={horizonFor} t0={windowStart} t1={windowEnd} search={alternativeSearch} onClearSearch={() => onAlternativeSearchChange(null)} onSelect={onSiteChange} />
 
       <aside className="explorer-side">
         <article className={`verdict verdict--earth ${earthUp ? 'is-up' : 'is-down'}`}>
@@ -330,7 +341,11 @@ export default function ExplorerMode({
       </aside>
 
       <MissionPlanner site={site} windows={cycle.jointWindows} now={t} end={windowEnd}
-        onJump={next => { setPlaying(false); commitInstant(next, onDayChange, onMinutesChange) }} />
+        onJump={(next, hours) => {
+          onAlternativeSearchChange({ kind: 'continuous', t0: next, t1: next + hours * 3_600_000, hours })
+          setPlaying(false)
+          commitInstant(next, onDayChange, onMinutesChange)
+        }} />
 
       <section className="controls explorer-controls">
         <div className="field">

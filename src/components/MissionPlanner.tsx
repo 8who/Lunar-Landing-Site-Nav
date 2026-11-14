@@ -10,7 +10,7 @@ interface Props {
   windows: TimeWindow[]
   now: number
   end: number
-  onJump: (t: number) => void
+  onJump: (t: number, hours: number) => void
 }
 
 export default function MissionPlanner({ site, windows, now, end, onJump }: Props) {
@@ -44,7 +44,7 @@ export default function MissionPlanner({ site, windows, now, end, onJump }: Prop
         {next && <p>{formatDuration(next.end - next.start)} of overlap available{!next.closed ? ' or more; search ends here' : ''}. Your {hours}-hour operation ends {formatUtc(next.start + hours * 3_600_000)}.</p>}
       </div>
       <div className="mission-actions">
-        <button disabled={!next || next.start === now} onClick={() => next && onJump(next.start)}>{next?.start === now ? 'At window start ✓' : 'Jump to window →'}</button>
+        <button disabled={!next || next.start === now} onClick={() => next && onJump(next.start, hours)}>{next?.start === now ? 'At window start ✓' : 'Jump to window →'}</button>
         <button onClick={downloadBrief}>Download briefing (HTML) ↓</button>
       </div>
       <p className="mission-assumption">

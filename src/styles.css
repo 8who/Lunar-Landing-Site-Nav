@@ -2682,6 +2682,12 @@ select { min-width: 210px; }
   --ok: #A2B69D;
   --danger: #C88779;
   --joint: #BEB49F;
+  --pole-north: #BDD6DE;
+  --pole-south: #E7D6AE;
+  --pole-axis: #A0B8B8;
+  --site-marker: #F29BBD;
+  --site-selected: #B9F3D0;
+  --site-marker-outline: #171916;
   --track: #343730;
   --shadow: 0 12px 30px -24px rgba(0, 0, 0, .72);
   --ring: 0 0 0 3px rgba(120, 158, 170, .3);
@@ -3176,6 +3182,33 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
 .mineral-sources summary { cursor: pointer; color: var(--text); padding: 8px 0; }
 .mineral-sources a { color: var(--earth); text-underline-offset: 3px; }
 .mineral-sources li { margin: 6px 0; }
+
+.globe-site-controls { position: absolute; z-index: 3; right: 12px; bottom: 36px; display: grid; justify-items: end; gap: 7px; max-width: calc(100% - 24px); cursor: default; }
+.globe-site-controls button { min-height: 34px; font-size: 12px; background: var(--bg-0); }
+.globe-site-controls label { display: grid; gap: 4px; padding: 9px; border-radius: 8px; background: var(--bg-0); max-width: min(260px, 100%); }
+.globe-site-controls label span { color: var(--muted); font-size: 12px; }
+.globe-site-controls select { max-width: 100%; width: 230px; font-size: 12px; }
+.globe-site-tooltip { position: absolute; z-index: 5; transform: translate(-50%, -100%); pointer-events: none; width: max-content; max-width: 220px; padding: 8px 10px; border-radius: 8px; color: var(--text); background: var(--bg-0); box-shadow: var(--shadow); font-size: 13px; line-height: 1.4; }
+.globe-site-tooltip strong, .globe-site-tooltip span { display: block; }
+.globe-site-tooltip span { color: var(--muted); font-size: 11px; }
+.site-alternatives { min-width: 0; padding: 16px 0; border-top: 1px solid var(--border); }
+.explorer > .site-alternatives { grid-area: alternatives; }
+.alternatives-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.alternatives-heading h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.alternatives-heading button { font-size: 12px; }
+.alternatives-context, .alternatives-count, .site-alternatives [role='status'] { color: var(--muted); font-size: 12px; line-height: 1.5; }
+.alternatives-context { max-width: 110ch; margin: 7px 0; }
+.site-alternatives ul { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 0; margin: 12px 0 0; list-style: none; }
+.site-alternatives li { min-width: 0; }
+.site-alternatives li button { display: grid; gap: 5px; width: 100%; height: 100%; padding: 10px 12px; text-align: left; white-space: normal; }
+.site-alternatives li strong { font-size: 13px; font-weight: 600; }
+.site-alternatives li span { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.explorer { grid-template-areas: 'intro intro' 'sites sites' 'hero earth' 'hero sun' 'hero summary' 'hero notice' 'hero array' 'alternatives alternatives' 'controls controls' 'sky sky' 'mission mission'; }
+@media (max-width: 820px) {
+  .explorer { grid-template-areas: 'intro' 'sites' 'hero' 'alternatives' 'earth' 'sun' 'summary' 'notice' 'array' 'controls' 'sky' 'mission'; }
+  .site-alternatives ul { grid-template-columns: minmax(0, 1fr); }
+  .alternatives-heading { align-items: flex-start; flex-wrap: wrap; }
+}
 @media (max-width: 1050px) { .mineral-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 600px) {
   .mineral-controls, .mineral-measurements { grid-template-columns: minmax(0, 1fr); gap: 12px; }
