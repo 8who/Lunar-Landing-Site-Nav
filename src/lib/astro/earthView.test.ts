@@ -135,3 +135,39 @@ describe('DSN antennas on Earth\'s disc', () => {
     }
   })
 })
+
+describe('only antennas on the side of Earth facing the site can link', () => {
+  it('never links a back-side antenna, even though it projects inside the disc', async () => {
+    const { stationSkyPoints, dsnStatus, siteSeesStation } = await import('./earthView')
+    let backSide = 0
+    let links = 0
+    for (const id of ['apollo11', 'malapert', 'shackleton']) {
+      const site = siteById(id)!
+      const observer = createObserver(site)
+      for (let h = 0; h < 24 * 30; h += 2) {
+        const t = Date.parse('2026-11-14T00:00:00Z') + h * 3_600_000
+        const sky = observer.skyAt(t)
+        const points = stationSkyPoints(site, t, sky.earth)
+        const status = dsnStatus(t, (st) => siteSeesStation(points.get(st.id), observer.skyline.at))
+        for (const st of status) {
+          const p = points.get(st.station.id)!
+          // Geometry and astronomy-engine agree on which side the antenna is on
+          // (Moon centre vs site parallax and refraction: < 1 deg).
+          expect(Math.abs(p.siteElevationAtStation - st.moonElevation)).toBeLessThan(1)
+          if (!p.facing) {
+            backSide++
+            expect(siteSeesStation(p, observer.skyline.at)).toBe(false)
+            expect(st.state).not.toBe('link')
+          }
+          if (st.state === 'link') {
+            links++
+            expect(p.facing).toBe(true)
+            expect(p.siteElevationAtStation).toBeGreaterThan(9)
+          }
+        }
+      }
+    }
+    expect(backSide).toBeGreaterThan(100)
+    expect(links).toBeGreaterThan(100)
+  })
+})

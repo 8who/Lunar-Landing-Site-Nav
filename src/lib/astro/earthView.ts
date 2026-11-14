@@ -113,7 +113,21 @@ export interface DsnStatus {
   moonAzimuth: number
   state: DsnLinkState
   /** Where the antenna itself sits in the site's sky, when computed */
-  skyPoint?: { azimuth: number; elevation: number }
+  skyPoint?: StationSkyPoint
+}
+
+export interface StationSkyPoint {
+  /** Direction of the antenna as seen from the site, deg */
+  azimuth: number
+  elevation: number
+  /**
+   * True when the antenna is on the hemisphere of Earth that faces the site.
+   * An antenna on the far side still projects inside Earth's disc on the sky,
+   * but there is solid Earth between it and the Moon: it must never count.
+   */
+  facing: boolean
+  /** Elevation of the site above the antenna's own horizon, deg (geometric) */
+  siteElevationAtStation: number
 }
 
 /** Mean Earth radius used to place the antennas on the disc, km. */
@@ -129,7 +143,7 @@ export function stationSkyPoints(
   site: LunarSite,
   date: Date | number,
   earth: { azimuth: number; elevation: number; distanceKm: number },
-): Map<string, { azimuth: number; elevation: number }> {
+): Map<string, StationSkyPoint> {
   const axes = earthAxesInSky(site, date)
   const r = Math.PI / 180
   const ce = Math.cos(earth.elevation * r)
@@ -138,7 +152,7 @@ export function stationSkyPoints(
     n: earth.distanceKm * ce * Math.cos(earth.azimuth * r),
     u: earth.distanceKm * Math.sin(earth.elevation * r),
   }
-  const out = new Map<string, { azimuth: number; elevation: number }>()
+  const out = new Map<string, StationSkyPoint>()
   for (const station of DSN_STATIONS) {
     const g = earthFixedUnit(station.lat, station.lon)
     const k = EARTH_RADIUS_KM + station.heightM / 1000
@@ -150,7 +164,17 @@ export function stationSkyPoints(
     const d = Math.hypot(p.e, p.n, p.u)
     let azimuth = Math.atan2(p.e, p.n) / r
     if (azimuth < 0) azimuth += 360
-    out.set(station.id, { azimuth, elevation: Math.asin(p.u / d) / r })
+    // Antenna's local vertical in the site frame; the site is at -p from it.
+    const nE = g.x * axes.x.e + g.y * axes.y.e + g.z * axes.z.e
+    const nN = g.x * axes.x.n + g.y * axes.y.n + g.z * axes.z.n
+    const nU = g.x * axes.x.u + g.y * axes.y.u + g.z * axes.z.u
+    const siteElevationAtStation = Math.asin(-(nE * p.e + nN * p.n + nU * p.u) / d) / r
+    out.set(station.id, {
+      azimuth,
+      elevation: Math.asin(p.u / d) / r,
+      facing: siteElevationAtStation > 0,
+      siteElevationAtStation,
+    })
   }
   return out
 }
@@ -165,7 +189,12 @@ export function stationSkyPoints(
  *
  * `siteSees` is either one answer for all antennas or a per-antenna test; the
  * per-antenna form lets the caller check each antenna's own point on Earth's
- * disc against the skyline (see stationSkyPoints).
+ * disc against the skyline (see siteSeesStation).
+ *
+ * The Moon check runs first and on its own already rejects any antenna on
+ * Earth's far side (the Moon is below its horizon there). siteSeesStation
+ * repeats that geometrically so the skyline test cannot accept a back-side
+ * antenna that merely projects inside the disc.
  */
 export function dsnStatus(
   date: Date | number,
@@ -191,4 +220,16 @@ export function earthFixedUnit(latDeg: number, lonDeg: number): Vec3 {
   const lat = latDeg * (Math.PI / 180)
   const lon = lonDeg * (Math.PI / 180)
   return { x: Math.cos(lat) * Math.cos(lon), y: Math.cos(lat) * Math.sin(lon), z: Math.sin(lat) }
+}
+
+/**
+ * Whether the site has a clear line to one antenna: the antenna is on the
+ * hemisphere of Earth facing the site, and its own point on the disc is above
+ * the lunar skyline at its azimuth.
+ */
+export function siteSeesStation(
+  point: StationSkyPoint | undefined,
+  skylineAt: (azimuthDeg: number) => number,
+): boolean {
+  return !!point && point.facing && point.elevation > skylineAt(point.azimuth)
 }

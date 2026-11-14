@@ -9,6 +9,7 @@ import {
   dsnStatus,
   earthAxesInSky,
   earthFixedUnit,
+  siteSeesStation,
   stationSkyPoints,
   type DsnLinkState,
   type DsnStatus,
@@ -680,10 +681,9 @@ export default function SkyView({ site, t, panel }: Props) {
     // Each antenna is tested at its own point on Earth's disc, not at the
     // centre: at a polar site part of the disc can be behind a ridge.
     const points = stationSkyPoints(site, t, sample.earth)
-    const stations = dsnStatus(t, (station) => {
-      const p = points.get(station.id)
-      return !!p && p.elevation > observer.skyline.at(p.azimuth)
-    }).map((st) => ({ ...st, skyPoint: points.get(st.station.id) }))
+    const stations = dsnStatus(t, (station) =>
+      siteSeesStation(points.get(station.id), observer.skyline.at),
+    ).map((st) => ({ ...st, skyPoint: points.get(st.station.id) }))
     updateRef.current(sample, site.id, earthAxesInSky(site, t), stations)
     setSky(sample)
     setDsn(stations)
