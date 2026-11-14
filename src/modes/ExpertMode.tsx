@@ -458,6 +458,7 @@ export default function ExpertMode({
               sites={SITES}
               selected={site}
               onPick={(lat, lon) => onSiteChange(customSite(lat, lon))}
+              t={skyTime}
             />
           </section>
 
