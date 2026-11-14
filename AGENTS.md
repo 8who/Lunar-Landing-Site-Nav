@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Vi@bility42 — Lunar Landing Site Navigator. Vite + React 19 + TypeScript app
+Lumbra — Lunar Landing Site Navigator. Vite + React 19 + TypeScript app
 that compares lunar landing sites by sunlight and direct-to-Earth visibility.
 Physics lives in `src/lib/astro/` and is validated against JPL Horizons.
 

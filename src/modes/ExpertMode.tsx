@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import TimelineChart from '../components/TimelineChart'
 import RankingTable from '../components/RankingTable'
 import MineralSelectionPanel from '../components/MineralSelectionPanel'
@@ -14,9 +14,11 @@ import { bestFixedPanel, compassPoint16 } from '../lib/astro/panel'
 import { ArrayPowerBars, mastLine, useTrackingPointing } from '../components/ArrayPower'
 import { createObserver } from '../lib/astro/observer'
 import { SITES, customSite, isTerrainCritical } from '../lib/astro/sites'
-import type { LunarSite, SkySample } from '../lib/astro/types'
-import { formatDuration, formatUtc, deg } from '../lib/format'
+import type { LunarSite, SkySample, TimeWindow } from '../lib/astro/types'
+import { formatDuration, formatInstant, formatUtc, deg } from '../lib/format'
 import { utcDay } from '../lib/astro/scrub'
+
+
 
 export interface ExpertModeProps {
   site: LunarSite
@@ -35,6 +37,10 @@ export interface ExpertModeProps {
 }
 
 const DAY = 86_400_000
+/** Playback: the whole analysis range plays in about PLAY_FRAMES * PLAY_INTERVAL_MS. */
+const PLAY_FRAMES = 250
+const PLAY_INTERVAL_MS = 80
+const SCRUB_STEPS = 10_000
 
 const CATEGORY_ORDER = ['candidate', 'clps', 'international', 'apollo'] as const
 const CATEGORY_LABEL: Record<string, string> = {
@@ -51,6 +57,8 @@ const RANK_CACHE = new Map<string, RankedSite[]>()
 // The ranking is a landing-site shortlist, not a history tour: only the
 // south-pole candidate regions compete there.
 const RANK_SITES = SITES.filter((s) => s.category === 'candidate')
+
+
 
 export default function ExpertMode({
   site,
@@ -165,8 +173,86 @@ export default function ExpertMode({
     setHover(null)
   }, [site.id, site.lat, site.lon, t0, t1, stepMin, t])
 
-  // Sky view follows the hovered sample, then the pinned one, then the shared instant.
-  const skyTime = hover?.t ?? pinned?.t ?? t
+  // ---- Playback: same idea as Explorer, but on a local instant so the analysis
+// range (which starts at `day`) is never rebuilt while playing. ----
+const [playing, setPlaying] = useState(false)
+const [loop, setLoop] = useState(true)
+// null = follow the shared instant `t`
+const [simT, setSimT] = useState<number | null>(null)
+
+const spanMs = t1 - t0
+const playhead = Math.min(t1, Math.max(t0, simT ?? t))
+const playStepMs = spanMs / PLAY_FRAMES
+const playheadRef = useRef(playhead)
+useEffect(() => {
+  playheadRef.current = playhead
+}, [playhead])
+
+// The shared instant moved from outside (date input): follow it and stop.
+useEffect(() => {
+  setSimT(null)
+  setPlaying(false)
+}, [t])
+
+// A new site is a new question: stop the playback.
+useEffect(() => {
+  setPlaying(false)
+}, [site.id, site.lat, site.lon])
+
+// The controls only exist in the single-site view.
+useEffect(() => {
+  if (view !== 'single') setPlaying(false)
+}, [view])
+
+useEffect(() => {
+  if (!playing || view !== 'single') return
+  const timer = setInterval(() => {
+    let next = playheadRef.current + playStepMs
+    if (next >= t1) {
+      if (loop) {
+        next = t0
+      } else {
+        next = t1
+        setPlaying(false)
+      }
+    }
+    playheadRef.current = next
+    setSimT(next)
+  }, PLAY_INTERVAL_MS)
+  return () => clearInterval(timer)
+}, [playing, loop, view, t0, t1, playStepMs])
+
+const togglePlay = () => {
+  if (!playing) {
+    // Playback drives the sky: drop any pinned/hovered moment.
+    setPinned(null)
+    setHover(null)
+    if (playhead >= t1 - playStepMs) setSimT(t0)
+  }
+  setPlaying((value) => !value)
+}
+
+const scrubValue = Math.round(((playhead - t0) / spanMs) * SCRUB_STEPS)
+const scrubTo = (value: number) => {
+  setPinned(null)
+  setSimT(t0 + (value / SCRUB_STEPS) * spanMs)
+}
+
+const lane = (windows: TimeWindow[], tone: 'sun' | 'earth') =>
+  windows.map((w, i) => (
+    <span
+      key={`${tone}-${i}`}
+      className={`scrub-seg scrub-seg-${tone}`}
+      style={{
+        left: `${((w.start - t0) / spanMs) * 100}%`,
+        width: `${(w.durationMs / spanMs) * 100}%`,
+      }}
+    />
+  ))
+
+// Sky view follows the hovered sample, then the pinned one, then the playhead.
+const skyTime = hover?.t ?? pinned?.t ?? playhead
+
   const sky = useMemo(() => createObserver(site).skyAt(skyTime), [site, skyTime])
   // Readout, cursor and first-person view describe one instant. Previously the
   // readout silently used the range midpoint while the sky used shared time.
@@ -410,7 +496,7 @@ export default function ExpertMode({
             </p>
           </section>
 
-          <section className="chart-card">
+                    <section className="chart-card">
             <div className="chart-head">
               <div>
                 <h2>{site.name}</h2>
@@ -501,6 +587,61 @@ export default function ExpertMode({
               </div>
               <p className="sky-hint">Drag to look around</p>
             </div>
+
+            <div className="field explorer-scrub expert-scrub">
+              <div className="scrub-head">
+                <strong className="scrub-instant">{formatInstant(playhead)}</strong>
+                <div className="scrub-actions">
+                  <button
+                    className={`scrub-play${playing ? ' is-playing' : ''}`}
+                    onClick={togglePlay}
+                    aria-pressed={playing}
+                  >
+                    {playing ? (
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <rect x="3.6" y="3" width="3.2" height="10" rx="1.1" />
+                        <rect x="9.2" y="3" width="3.2" height="10" rx="1.1" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M4.9 2.9 12.8 8l-7.9 5.1Z" />
+                      </svg>
+                    )}
+                    <span>{playing ? 'Pause' : 'Play'}</span>
+                  </button>
+                  <label className="scrub-loop">
+                    <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
+                    Loop
+                  </label>
+                </div>
+              </div>
+
+              <div className="scrub-grid">
+                <span className="scrub-label">Sun</span>
+                <div className="scrub-track" role="img" aria-label="Sunlight over the selected range">
+                  {lane(sunWindows, 'sun')}
+                </div>
+
+                <span className="scrub-label">Earth</span>
+                <div className="scrub-track" role="img" aria-label="Earth visibility over the selected range">
+                  {lane(commWindows, 'earth')}
+                </div>
+
+                <span />
+                <input
+                  className="scrub-range"
+                  type="range"
+                  min={0}
+                  max={SCRUB_STEPS}
+                  step={1}
+                  value={scrubValue}
+                  onChange={(e) => scrubTo(Number(e.target.value))}
+                  onPointerDown={() => setPlaying(false)}
+                  aria-label="Time across the selected range"
+                />
+              </div>
+            </div>
+
             <SkyView
               site={site}
               t={skyTime}
@@ -513,6 +654,7 @@ export default function ExpertMode({
             />
           </section>
         </>
+        
       ) : view === 'resources' ? (
         <MineralSelectionPanel rows={rankedBase} loading={rankLoading} mineral={mineral} onMineralChange={setMineral} radius={radius} onRadiusChange={setRadius} prefs={resourcePrefs} onPrefsChange={setResourcePrefs} dataset={mineralDataset} error={mineralError} onRetry={() => setMineralAttempt((n) => n + 1)} onSelect={(next, criteria) => {
           onAlternativeSearchChange({ kind: 'resources', t0, t1, ...criteria })
