@@ -1,28 +1,15 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { RankedSite } from '../lib/astro/ranking'
 import type { LunarSite } from '../lib/astro/types'
 import type { ResourceSearchCriteria } from '../lib/siteAlternatives'
 import { formatCoord, formatDecimal, formatPercent } from '../lib/format'
-import { loadMineralDataset, MINERAL_KEYS, MINERAL_PRODUCTS, sampleMineral, scoreResources, trekMetadataUrl, type MineralDataset, type MineralKey, type ResourcePreferences } from '../lib/resources/minerals'
+import { MINERAL_KEYS, MINERAL_PRODUCTS, sampleMineral, scoreResources, trekMetadataUrl, type MineralDataset, type MineralKey, type ResourcePreferences } from '../lib/resources/minerals'
 
-interface Props { rows: RankedSite[]; loading: boolean; onSelect: (site: LunarSite, criteria: ResourceSearchCriteria) => void }
-const INITIAL: ResourcePreferences = { mineralWeight: 35, target: 10, minSun: 50, minEarth: 50, minJoint: 25 }
+interface Props { rows: RankedSite[]; loading: boolean; onSelect: (site: LunarSite, criteria: ResourceSearchCriteria) => void; mineral: MineralKey; onMineralChange: (mineral: MineralKey) => void; radius: number; onRadiusChange: (radius: number) => void; prefs: ResourcePreferences; onPrefsChange: (prefs: ResourcePreferences) => void; dataset: MineralDataset | null; error: boolean; onRetry: () => void }
 
-export default function MineralSelectionPanel({ rows, loading, onSelect }: Props) {
-  const [dataset, setDataset] = useState<MineralDataset | null>(null)
-  const [error, setError] = useState(false)
-  const [attempt, setAttempt] = useState(0)
-  const [mineral, setMineral] = useState<MineralKey>('feo')
-  const [radius, setRadius] = useState(0)
-  const [prefs, setPrefs] = useState(INITIAL)
+export default function MineralSelectionPanel({ rows, loading, onSelect, mineral, onMineralChange, radius, onRadiusChange, prefs, onPrefsChange, dataset, error, onRetry }: Props) {
   const [selectedId, setSelectedId] = useState('')
   const product = MINERAL_PRODUCTS[mineral]
-  useEffect(() => {
-    let active = true
-    setError(false)
-    loadMineralDataset().then((data) => { if (active) setDataset(data) }).catch(() => { if (active) setError(true) })
-    return () => { active = false }
-  }, [attempt])
   const sampled = useMemo(() => rows.map((row) => ({ ...row, sample: dataset ? sampleMineral(dataset[mineral].cells, row.site.lat, row.site.lon, radius) : null })), [rows, dataset, mineral, radius])
   const scored = useMemo(() => scoreResources(sampled, prefs), [sampled, prefs])
   const best = scored.find((row) => row.eligible)
@@ -30,7 +17,7 @@ export default function MineralSelectionPanel({ rows, loading, onSelect }: Props
   const changeNumber = (key: keyof ResourcePreferences, value: string) => {
     const number = Number(value)
     if (!Number.isFinite(number)) return
-    setPrefs((old) => ({ ...old, [key]: key === 'target' ? Math.max(.01, Math.min(1000, number)) : Math.max(0, Math.min(100, number)) }))
+    onPrefsChange({ ...prefs, [key]: key === 'target' ? Math.max(.01, Math.min(1000, number)) : Math.max(0, Math.min(100, number)) })
   }
 
   return (
@@ -42,10 +29,10 @@ export default function MineralSelectionPanel({ rows, loading, onSelect }: Props
       <div className="mineral-controls">
         <label className="field"><span>Resource objective</span><select value={mineral} onChange={(e) => {
           const next = e.target.value as MineralKey
-          setMineral(next)
-          setPrefs((old) => ({ ...old, target: MINERAL_PRODUCTS[next].target }))
+          onMineralChange(next)
+          onPrefsChange({ ...prefs, target: MINERAL_PRODUCTS[next].target })
         }}>{MINERAL_KEYS.map((key) => <option key={key} value={key}>{MINERAL_PRODUCTS[key].label}</option>)}</select></label>
-        <label className="field"><span>Sampling area</span><select value={radius} onChange={(e) => setRadius(Number(e.target.value))}><option value={0}>Bin containing the landing site</option><option value={25}>Strongest regional bin within 25 km</option><option value={50}>Strongest regional bin within 50 km</option></select></label>
+        <label className="field"><span>Sampling area</span><select value={radius} onChange={(e) => onRadiusChange(Number(e.target.value))}><option value={0}>Bin containing the landing site</option><option value={25}>Strongest regional bin within 25 km</option><option value={50}>Strongest regional bin within 50 km</option></select></label>
         <label className="field"><span>Target abundance ({product.unit})</span><input type="number" min="0.01" max="1000" step="0.1" value={prefs.target} onChange={(e) => changeNumber('target', e.target.value)} /></label>
         <label className="field mineral-weight"><span>Resource influence: {prefs.mineralWeight}%</span><input type="range" min={0} max={100} step={5} value={prefs.mineralWeight} onChange={(e) => changeNumber('mineralWeight', e.target.value)} /></label>
       </div>
@@ -55,7 +42,7 @@ export default function MineralSelectionPanel({ rows, loading, onSelect }: Props
       <p className="mineral-method">Planning score = {100 - prefs.mineralWeight}% × simultaneous visibility + {prefs.mineralWeight}% × resource score. Resource score = abundance ÷ target, capped at 100. Targets and weights are your planning assumptions, not NASA recommendations. Sites must meet every minimum, have a terrain skyline, and have some simultaneous visibility.</p>
       {radius > 0 && <p className="terrain-warning">Regional search includes the site’s own bin plus bin centres within {radius} km. A nearby maximum is off-site context: no rover route, accessible deposit, local illumination, or communications at that bin is inferred.</p>}
       <div aria-live="polite" role="status" className="mineral-status">
-        {error ? <p>Mineral data could not load. Operational ranking remains available. <button onClick={() => setAttempt((n) => n + 1)}>Retry mineral data</button></p>
+        {error ? <p>Mineral data could not load. Operational ranking remains available. <button onClick={onRetry}>Retry mineral data</button></p>
           : !dataset || loading ? <p>Loading source abundances and operational conditions…</p>
             : <p>{scored.filter((row) => row.eligible).length} of {rows.length} sites meet your criteria. {best ? <>Highest planning score: <strong>{best.site.name}</strong> ({formatDecimal(best.score!, 1)}/100).</> : 'No candidate qualifies. Review the minimums or choose another date range; no site is recommended.'}</p>}
       </div>

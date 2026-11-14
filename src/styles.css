@@ -878,6 +878,14 @@ button {
 .rank-hint {
   font-style: italic;
 }
+.ranking-resource-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  cursor: pointer;
+}
+.ranking-resource-toggle input { accent-color: var(--earth); }
 
 .rank-loading {
   margin: 18px 2px 22px;
@@ -922,6 +930,18 @@ button {
   color: var(--muted);
   background: rgba(255, 255, 255, 0.03);
 }
+.ranking-table thead th button {
+  border: 0;
+  padding: 0;
+  color: inherit;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.ranking-table thead th button:hover,
+.ranking-table thead th button:focus-visible { color: var(--text); }
 
 .ranking-table tbody tr {
   cursor: pointer;
@@ -2858,7 +2878,8 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
   background: #10120f;
   box-shadow: none;
 }
-.explorer-hero .moon-globe { border-radius: 13px; background: #10120f; }
+.explorer-hero .moon-globe,
+.globe-card .moon-globe { border-radius: 13px; background: #10120f; }
 .explorer-picked {
   top: 14px;
   left: 14px;

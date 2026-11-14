@@ -1,9 +1,15 @@
 import type { RankSortKey, RankedSite } from '../lib/astro/ranking'
 import type { LunarSite } from '../lib/astro/types'
 import { formatDuration, formatPercent } from '../lib/format'
+import type { ResourceRow } from '../lib/resources/minerals'
 
 interface Props {
   rows: RankedSite[]
+  resourceById?: Map<string, ResourceRow>
+  resourceLabel?: string
+  resourceLoading?: boolean
+  sortResource?: boolean
+  onSortResource?: () => void
   sortBy: RankSortKey
   onSort: (key: RankSortKey) => void
   onSelect: (site: LunarSite) => void
@@ -18,24 +24,27 @@ const COLUMNS: { key: RankSortKey | null; label: string }[] = [
   { key: null, label: 'Longest sunlight' },
 ]
 
-export default function RankingTable({ rows, sortBy, onSort, onSelect }: Props) {
+export default function RankingTable({ rows, sortBy, onSort, onSelect, resourceById, resourceLabel, resourceLoading, sortResource, onSortResource }: Props) {
+  const sortedRows = sortResource && resourceById?.size ? [...rows].sort((a, b) => (resourceById.get(b.site.id)?.score ?? -1) - (resourceById.get(a.site.id)?.score ?? -1)) : rows
   return (
     <div className="ranking-wrap">
       <table className="ranking-table">
+        <caption>{resourceById?.size ? `Resource-adjusted planning score for ${resourceLabel}. Select a column heading to sort.` : 'Operational comparison of landing sites.'}</caption>
         <thead>
           <tr>
             <th className="site-head">Site</th>
+            {resourceById && <th scope="col" aria-sort={sortResource ? 'descending' : 'none'}><button type="button" onClick={onSortResource}>Resource score {sortResource ? '↓' : ''}</button></th>}
             {COLUMNS.map((col) =>
               col.key ? (
                 <th
                   key={col.label}
-                  className={`sortable${sortBy === col.key ? ' sorted' : ''}`}
+                  className={`sortable${!sortResource && sortBy === col.key ? ' sorted' : ''}`}
                   onClick={() => onSort(col.key as RankSortKey)}
-                  aria-sort={sortBy === col.key ? 'descending' : 'none'}
+                  aria-sort={!sortResource && sortBy === col.key ? 'descending' : 'none'}
                   title={`Sort by ${col.label}`}
                 >
                   {col.label}
-                  {sortBy === col.key && <span className="sort-arrow">↓</span>}
+                  {!sortResource && sortBy === col.key && <span className="sort-arrow">↓</span>}
                 </th>
               ) : (
                 <th key={col.label}>{col.label}</th>
@@ -44,7 +53,7 @@ export default function RankingTable({ rows, sortBy, onSort, onSelect }: Props) 
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => (
+          {sortedRows.map((row, i) => (
             <tr
               key={row.site.id}
               onClick={() => onSelect(row.site)}
@@ -67,6 +76,7 @@ export default function RankingTable({ rows, sortBy, onSort, onSelect }: Props) 
                   </small>
                 </div>
               </td>
+              {resourceById && <td className="mono" title={resourceById.get(row.site.id)?.reasons.join('; ') || 'Combined mineral and simultaneous visibility planning score'}>{resourceLoading ? 'Loading…' : resourceById.get(row.site.id)?.score == null ? '—' : `${resourceById.get(row.site.id)!.score!.toFixed(1)} / 100`}</td>}
               <td className="mono sun-text">{formatPercent(row.metrics.sunlitPct)}</td>
               <td className="mono earth-text">{formatPercent(row.metrics.commPct)}</td>
               <td className="mono">{formatPercent(row.metrics.jointPct)}</td>

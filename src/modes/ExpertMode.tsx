@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import TimelineChart from '../components/TimelineChart'
 import RankingTable from '../components/RankingTable'
 import MineralSelectionPanel from '../components/MineralSelectionPanel'
+import { loadMineralDataset, MINERAL_PRODUCTS, sampleMineral, scoreResources, type MineralDataset, type MineralKey, type ResourcePreferences } from '../lib/resources/minerals'
 import OpportunityPanel from '../components/OpportunityPanel'
 import SkyView from '../components/SkyView'
 import MoonGlobe from '../components/MoonGlobe'
@@ -71,6 +72,21 @@ export default function ExpertMode({
   const [customLon, setCustomLon] = useState('0.00')
   const [view, setView] = useState<'single' | 'rank' | 'find' | 'resources'>('single')
   const [sortBy, setSortBy] = useState<RankSortKey>('jointPct')
+  const [sortResource, setSortResource] = useState(true)
+  const [includeResources, setIncludeResources] = useState(true)
+  const [mineral, setMineral] = useState<MineralKey>('feo')
+  const [radius, setRadius] = useState(0)
+  const [resourcePrefs, setResourcePrefs] = useState<ResourcePreferences>({ mineralWeight: 35, target: 10, minSun: 50, minEarth: 50, minJoint: 25 })
+  const [mineralDataset, setMineralDataset] = useState<MineralDataset | null>(null)
+  const [mineralError, setMineralError] = useState(false)
+  const [mineralAttempt, setMineralAttempt] = useState(0)
+  useEffect(() => {
+    if (view !== 'resources' && !(view === 'rank' && includeResources)) return
+    let active = true
+    setMineralError(false)
+    loadMineralDataset().then((data) => { if (active) setMineralDataset(data) }).catch(() => { if (active) { setMineralDataset(null); setMineralError(true) } })
+    return () => { active = false }
+  }, [view, includeResources, mineralAttempt])
 
   // Only decorate the shortlist when the ranking or the calendar is open: each
   // profile marches a few hundred thousand grid samples, and the single-site
@@ -140,6 +156,8 @@ export default function ExpertMode({
     () => [...rankedBase].sort((a, b) => b.metrics[sortBy] - a.metrics[sortBy]),
     [rankedBase, sortBy],
   )
+  const resourceRows = useMemo(() => mineralDataset ? scoreResources(rankedBase.map((row) => ({ ...row, sample: sampleMineral(mineralDataset[mineral].cells, row.site.lat, row.site.lon, radius) })), resourcePrefs) : null, [rankedBase, mineralDataset, mineral, radius, resourcePrefs])
+  const resourceById = useMemo(() => new Map(resourceRows?.map((row) => [row.site.id, row]) ?? []), [resourceRows])
 
   // A pinned moment belongs to one site and one range: drop it when either moves.
   useLayoutEffect(() => {
@@ -496,7 +514,7 @@ export default function ExpertMode({
           </section>
         </>
       ) : view === 'resources' ? (
-        <MineralSelectionPanel rows={rankedBase} loading={rankLoading} onSelect={(next, criteria) => {
+        <MineralSelectionPanel rows={rankedBase} loading={rankLoading} mineral={mineral} onMineralChange={setMineral} radius={radius} onRadiusChange={setRadius} prefs={resourcePrefs} onPrefsChange={setResourcePrefs} dataset={mineralDataset} error={mineralError} onRetry={() => setMineralAttempt((n) => n + 1)} onSelect={(next, criteria) => {
           onAlternativeSearchChange({ kind: 'resources', t0, t1, ...criteria })
           onSiteChange(next)
           setView('single')
@@ -506,10 +524,9 @@ export default function ExpertMode({
           <div className="chart-head">
             <div>
               <h2>Site ranking — {days === 30 ? '1 lunar day' : `${days} days`}</h2>
-              <p>
-                {RANK_SITES.length} south-pole candidates · {formatUtc(t0)} → {formatUtc(t1)} · 1 h
-                resolution
-              </p>
+              <p>{RANK_SITES.length} south-pole candidates · {formatUtc(t0)} → {formatUtc(t1)} · 1 h resolution</p>
+              <label className="ranking-resource-toggle"><input type="checkbox" checked={includeResources} onChange={(event) => setIncludeResources(event.target.checked)} /> Include mineral criteria</label>
+              {includeResources && <p>Resource-adjusted score: {MINERAL_PRODUCTS[mineral].label} · {resourcePrefs.mineralWeight}% resource influence · <button type="button" onClick={() => setView('resources')}>Adjust resources and minimums</button>{mineralError && ' · Mineral data unavailable; operational values remain visible.'}</p>}
             </div>
             <p className="rank-hint">Click a header to re-sort · click a row to open that site</p>
           </div>
@@ -520,10 +537,15 @@ export default function ExpertMode({
           ) : (
             <RankingTable
               rows={ranked}
+              resourceById={includeResources ? resourceById : undefined}
+              resourceLabel={MINERAL_PRODUCTS[mineral].label}
+              resourceLoading={includeResources && !mineralDataset && !mineralError}
+              sortResource={includeResources && sortResource && !!mineralDataset}
+              onSortResource={() => setSortResource(true)}
               sortBy={sortBy}
-              onSort={setSortBy}
+              onSort={(key) => { setSortBy(key); setSortResource(false) }}
               onSelect={(next) => {
-                onAlternativeSearchChange({ kind: 'operations', t0, t1 })
+                onAlternativeSearchChange(includeResources && mineralDataset ? { kind: 'resources', t0, t1, mineral, radiusKm: radius, preferences: { ...resourcePrefs } } : { kind: 'operations', t0, t1 })
                 onSiteChange(next)
                 setView('single')
               }}
