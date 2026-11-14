@@ -6,6 +6,7 @@ import MoonGlobe from '../components/MoonGlobe'
 import { buildTimeline } from '../lib/astro/timeline'
 import { rankSites, type RankSortKey, type RankedSite } from '../lib/astro/ranking'
 import { bestFixedPanel } from '../lib/astro/panel'
+import { ArrayPowerBars, mastLine, useTrackingPointing } from '../components/ArrayPower'
 import { createObserver } from '../lib/astro/observer'
 import { SITES, customSite, isTerrainCritical } from '../lib/astro/sites'
 import type { LunarSite, SkySample } from '../lib/astro/types'
@@ -67,7 +68,8 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
 
   useEffect(() => {
     if (view !== 'rank') return
-    const key = `${t0}:${t1}`
+    const mastM = site.mastHeightM ?? 0
+    const key = `${t0}:${t1}:${mastM}`
     const cached = RANK_CACHE.get(key)
     if (cached) {
       setRankedBase(cached)
@@ -83,7 +85,12 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
     const frame = requestAnimationFrame(() => {
       timer = setTimeout(() => {
         if (cancelled) return
-        const rows = rankSites(RANK_SITES, t0, t1, { sortBy: 'jointPct' })
+        const rows = rankSites(
+          RANK_SITES.map((s) => ({ ...s, mastHeightM: mastM })),
+          t0,
+          t1,
+          { sortBy: 'jointPct' },
+        )
         RANK_CACHE.set(key, rows)
         setRankedBase(rows)
         setRankLoading(false)
@@ -94,7 +101,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
       cancelAnimationFrame(frame)
       if (timer) clearTimeout(timer)
     }
-  }, [view, t0, t1])
+  }, [view, t0, t1, site.mastHeightM])
 
   // Re-sorting the already computed metrics is instant; no need to re-score.
   const ranked = useMemo(
@@ -118,12 +125,12 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
     [view, samples],
   )
 
-  const panelNow =
-    sky.sun.elevation > 0
-      ? `Tilt ${(90 - sky.sun.elevation).toFixed(1)}° from horizontal · heading ${Math.round(
-          sky.sun.azimuth,
-        ) % 360}° ${compassPoint(sky.sun.azimuth)}`
-      : 'Sun below horizon'
+  const { pointing } = useTrackingPointing(site, skyTime)
+  const panelNow = sky.sunlit
+    ? `Tilt ${(90 - Math.max(0, sky.sun.elevation)).toFixed(1)}° from horizontal · heading ${
+        Math.round(sky.sun.azimuth) % 360
+      }° ${compassPoint(sky.sun.azimuth)} · turn ${Math.abs(pointing.turnRateDegPerHour).toFixed(2)}°/h`
+    : 'Sun below horizon'
 
   const applyCustom = () => {
     const lat = Number(customLat)
@@ -280,7 +287,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
             <div className="chart-head">
               <div>
                 <h2>Solar panel</h2>
-                <p>Fixed array · orientation for this site and range</p>
+                <p>Fixed array · orientation for this site and range · {mastLine(site, sky.horizonDipDeg)}</p>
               </div>
             </div>
 
@@ -311,8 +318,23 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
               )}
             </div>
 
+            {bestPanel && (
+              <ArrayPowerBars
+                caption="Average power per m² · selected range"
+                rows={[
+                  { label: 'Two-axis Sun-tracking array', value: metrics.meanTrackingFluxWm2 },
+                  {
+                    label: `Best fixed panel (${bestPanel.tiltDeg}°, ${bestPanel.azimuthDeg}°)`,
+                    value: (metrics.meanTrackingFluxWm2 * bestPanel.capturedPct) / 100,
+                  },
+                  { label: 'Flat on the deck', value: metrics.meanFlatFluxWm2 },
+                ]}
+              />
+            )}
+
             <p className="panel-note">
-              Flat-horizon model; Sun elevation measured at the disc centre.
+              Flat-horizon model; the Sun counts from its upper limb. The mast lowers the horizon
+              by acos(R/(R+h)).
             </p>
           </section>
 
