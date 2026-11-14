@@ -3,7 +3,7 @@ import MissionPlanner from '../components/MissionPlanner'
 import MoonGlobe from '../components/MoonGlobe'
 import SkyView from '../components/SkyView'
 import ArrayCard from '../components/ArrayPower'
-import { bestFixedPanel } from '../lib/astro/panel'
+import { bestFixedPanel, compassPoint16 } from '../lib/astro/panel'
 import { buildTimeline } from '../lib/astro/timeline'
 import { createObserver } from '../lib/astro/observer'
 import { SITES, customSite, isTerrainCritical } from '../lib/astro/sites'
@@ -19,7 +19,7 @@ import {
   utcDayStart,
   windowPercent,
 } from '../lib/astro/scrub'
-import type { LunarSite, TimeWindow } from '../lib/astro/types'
+import type { HorizonProfile, LunarSite, TimeWindow } from '../lib/astro/types'
 import { formatCoord, formatHours, formatInstant, formatMonthDay, formatUtc } from '../lib/format'
 
 export interface ExplorerModeProps {
@@ -198,10 +198,18 @@ export default function ExplorerMode({
   // A Sun whose centre sits just below the horizon can still be half visible
   // at the poles, so "up" means the upper limb is above the horizon.
   const sunUp = sky.sunlit
-  const sunPartial = sunUp && sky.sun.elevation + (sky.horizonDipDeg ?? 0) < sky.sun.angularDiameterDeg / 2
+  // The skyline is the terrain profile when it is loaded, otherwise the flat
+  // tangent-plane dip. Clearance is what the eye actually has to work with.
+  const profile = site.horizon
+  const flatDip = sky.horizonDipDeg ?? 0
+  const sunHorizon = sky.sun.horizonDeg ?? -flatDip
+  const earthHorizon = sky.earth.horizonDeg ?? -flatDip
+  const sunClearance = sky.sun.elevation - sunHorizon
+  const earthClearance = sky.earth.elevation - earthHorizon
+  const sunPartial = sunUp && sunClearance < sky.sun.angularDiameterDeg / 2
   const terrainCritical = isTerrainCritical(site)
-  const earthDegrees = Math.round(Math.abs(sky.earth.elevation))
-  const sunDegrees = Math.round(Math.abs(sky.sun.elevation))
+  const earthDegrees = Math.max(0, earthClearance).toFixed(1)
+  const sunDegrees = Math.max(0, sunClearance).toFixed(1)
 
   return (
     <div className="explorer">
@@ -242,8 +250,12 @@ export default function ExplorerMode({
             </div>
             <p>
               {earthUp
-                ? `Earth is ${earthDegrees} degrees above the horizon, so there is a clear line of sight (flat-terrain assumption).`
-                : 'Earth is below the horizon, no direct line of sight.'}
+                ? `Earth is ${earthDegrees}° above the local skyline, so there is a clear line of sight.`
+                : sky.earth.elevation > 0
+                  ? 'Earth is up, but the terrain skyline hides it, so there is no direct line of sight.'
+                  : `Earth is ${Math.abs(sky.earth.elevation).toFixed(
+                      1,
+                    )}° below the horizon, no direct line of sight.`}
             </p>
           </div>
         </article>
@@ -260,18 +272,24 @@ export default function ExplorerMode({
             <p>
               {sunUp
                 ? sunPartial
-                  ? 'The Sun is only partly above the horizon: panels get some light, and a vertical panel facing it gets the most.'
-                  : `The Sun is ${sunDegrees} degrees above the horizon, so solar panels get light.`
-                : 'The Sun is below the horizon, so it is night here.'}
+                  ? 'The Sun is only partly above the local skyline: panels get some light, and a vertical panel facing it gets the most.'
+                  : `The Sun is ${sunDegrees}° above the local skyline, so solar panels get light.`
+                : sky.sun.elevation > 0
+                  ? 'The Sun is up, but the terrain skyline hides it, so the site is in shadow.'
+                  : 'The Sun is below the horizon, so it is night here.'}
             </p>
           </div>
         </article>
 
         {terrainCritical && (
           <p className="terrain-warning">
-            Polar site: here the Sun and Earth skim the horizon, so nearby hills and crater walls
-            decide what you really see. These numbers assume flat ground; ridges can be lit
-            most of the time and crater floors never.
+            {profile
+              ? `Polar site: the Sun and Earth skim the horizon, so relief decides what you see. The skyline here comes from the LOLA elevation grid: it rises ${profile.maxElevationDeg.toFixed(
+                  1,
+                )}° towards ${compassPoint16(profile.maxAzimuthDeg)}, ${profile.maxDistanceKm.toFixed(
+                  0,
+                )} km away, and averages ${averageHorizon(profile).toFixed(1)}° around the horizon.`
+              : 'Polar site: the Sun and Earth skim the horizon, so nearby hills and crater walls decide what you really see. The elevation grid has not loaded, so these numbers assume flat ground; ridges can be lit most of the time and crater floors never.'}
           </p>
         )}
 
@@ -409,4 +427,11 @@ function arrayRows(
     },
     { label: 'Flat on the deck', value: metrics.meanFlatFluxWm2 },
   ]
+}
+
+/** Mean skyline elevation over all azimuths, deg: how enclosed the site is. */
+function averageHorizon(profile: HorizonProfile): number {
+  let sum = 0
+  for (const elevation of profile.elevations) sum += elevation
+  return sum / Math.max(1, profile.elevations.length)
 }

@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ExplorerMode from './modes/ExplorerMode'
 import ExpertMode from './modes/ExpertMode'
+import { buildHorizon } from './lib/astro/horizon'
 import { SITES } from './lib/astro/sites'
 import type { LunarSite } from './lib/astro/types'
+import { loadTerrainGrid } from './lib/terrainData'
 
 type Mode = 'explorer' | 'expert'
 
@@ -21,7 +23,56 @@ export default function App() {
   const [minutesOfDay, setMinutesOfDay] = useState(12 * 60)
   // Height of the solar array / antenna mast. Raising it lowers the horizon.
   const [mastHeightM, setMastHeightM] = useState(2)
-  const siteWithMast = useMemo(() => ({ ...site, mastHeightM }), [site, mastHeightM])
+
+  // The LOLA grid powers the terrain horizon, not just the sky view. It loads
+  // once; until it arrives (or if it fails) the app uses the flat model.
+  const [terrainGrid, setTerrainGrid] = useState<Float32Array | null>(null)
+  useEffect(() => {
+    let alive = true
+    loadTerrainGrid().then((grid) => {
+      if (alive) setTerrainGrid(grid)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // Profiles are pure functions of (grid, lat, lon, mast): cache them so a
+  // render, a view switch or a slider tick never recomputes an unchanged site.
+  // The mast is debounced: rebuilding 8 skyline profiles per slider tick would
+  // outrun the drag for a change of a few hundredths of a degree.
+  const [profileMast, setProfileMast] = useState(mastHeightM)
+  useEffect(() => {
+    const timer = setTimeout(() => setProfileMast(mastHeightM), 200)
+    return () => clearTimeout(timer)
+  }, [mastHeightM])
+
+  const horizonCache = useRef(new Map<string, LunarSite>())
+  const horizonFor = useCallback(
+    (input: LunarSite): LunarSite => {
+      // Reuse a profile only if it was built for this mast; a site that came
+      // back from the calendar carries the profile it was scored with.
+      if (!terrainGrid) return input
+      if (input.horizon?.eyeHeightM === profileMast) return input
+      const key = `${input.id}|${input.lat.toFixed(3)}|${input.lon.toFixed(3)}|${profileMast}`
+      const cached = horizonCache.current.get(key)
+      if (cached) return cached
+      const decorated: LunarSite = {
+        ...input,
+        mastHeightM: profileMast,
+        horizon: buildHorizon(terrainGrid, input.lat, input.lon, { mastHeightM: profileMast }),
+      }
+      horizonCache.current.set(key, decorated)
+      return decorated
+    },
+    [terrainGrid, profileMast],
+  )
+
+  const siteWithHorizon = useMemo(() => horizonFor(site), [horizonFor, site])
+  const siteWithMast = useMemo(
+    () => ({ ...siteWithHorizon, mastHeightM }),
+    [siteWithHorizon, mastHeightM],
+  )
 
   const t = useMemo(() => {
     const dayStart = Date.parse(`${day}T00:00:00Z`)
@@ -67,7 +118,7 @@ export default function App() {
               Expert
             </button>
           </div>
-          <label className="mast-control" title="Height of the solar array and antenna above the ground. A taller mast sees past the Moon's curvature, so the horizon drops.">
+          <label className="mast-control" title="Height of the solar array and antenna above the ground. A taller mast lifts the eye above the LOLA terrain skyline, which lowers the local horizon.">
             <span>Mast</span>
             <input
               type="range"
@@ -95,7 +146,14 @@ export default function App() {
           t={t}
         />
       ) : (
-        <ExpertMode site={siteWithMast} onSiteChange={setSite} day={day} onDayChange={setDay} t={t} />
+        <ExpertMode
+          site={siteWithMast}
+          onSiteChange={setSite}
+          day={day}
+          onDayChange={setDay}
+          t={t}
+          horizonFor={horizonFor}
+        />
       )}
     </div>
   )

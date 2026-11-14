@@ -45,15 +45,26 @@ export default function TimelineChart({
 
   // Adaptive vertical scale: at the poles everything happens within a few
   // degrees of the horizon, while equatorial sites need the full +-90 range.
+  // A terrain skyline can sit 30° up, and the chart has to show it.
   const maxAbs = useMemo(() => {
     let m = 0
     for (const s of samples) {
-      m = Math.max(m, Math.abs(s.sun.elevation), Math.abs(s.earth.elevation))
+      m = Math.max(
+        m,
+        Math.abs(s.sun.elevation),
+        Math.abs(s.earth.elevation),
+        Math.abs(s.sun.horizonDeg ?? 0),
+      )
     }
     if (m < 10) return 10
     if (m < 20) return 20
     return Math.min(90, Math.ceil((m + 3) / 10) * 10)
   }, [samples])
+
+  const hasSkyline = useMemo(
+    () => samples.some((s) => s.sun.horizonDeg !== undefined),
+    [samples],
+  )
 
   const y = (elev: number) =>
     M.top + ((maxAbs - Math.max(-maxAbs, Math.min(maxAbs, elev))) / (2 * maxAbs)) * INNER_H
@@ -66,29 +77,45 @@ export default function TimelineChart({
       })
       return d
     }
-    const sunArea = () => {
-      // Filled area only where the Sun is above the horizon.
+    const skyline = () => {
+      if (!hasSkyline) return ''
       let d = ''
-      let open = false
-      samples.forEach((s) => {
-        const on = s.sun.elevation > 0
-        const px = x(s.t)
-        const py = y(s.sun.elevation)
-        if (on && !open) {
-          d += `M${px.toFixed(2)},${y(0).toFixed(2)}L${px.toFixed(2)},${py.toFixed(2)}`
-          open = true
-        } else if (on && open) {
-          d += `L${px.toFixed(2)},${py.toFixed(2)}`
-        } else if (!on && open) {
-          d += `L${px.toFixed(2)},${y(0).toFixed(2)}Z`
-          open = false
-        }
+      samples.forEach((s, i) => {
+        const sky = s.sun.horizonDeg ?? 0
+        d += `${i === 0 ? 'M' : 'L'}${x(s.t).toFixed(2)},${y(sky).toFixed(2)}`
       })
-      if (open) d += `L${x(t1).toFixed(2)},${y(0).toFixed(2)}Z`
       return d
     }
-    return { sun: build('sun'), earth: build('earth'), sunArea: sunArea() }
-  }, [samples, t0, t1, maxAbs])
+    // Lit area: between the Sun and the skyline it has to clear, only where it
+    // is above it. Without a profile the skyline is the tangent plane.
+    const sunArea = () => {
+      let d = ''
+      let band: { px: number; sun: number; sky: number }[] = []
+      const flush = () => {
+        if (band.length === 0) return
+        d += `M${band[0].px.toFixed(2)},${y(band[0].sky).toFixed(2)}`
+        for (const p of band) d += `L${p.px.toFixed(2)},${y(p.sun).toFixed(2)}`
+        for (let i = band.length - 1; i >= 0; i--) {
+          d += `L${band[i].px.toFixed(2)},${y(band[i].sky).toFixed(2)}`
+        }
+        d += 'Z'
+        band = []
+      }
+      for (const s of samples) {
+        const sky = s.sun.horizonDeg ?? 0
+        if (s.sun.elevation > sky) band.push({ px: x(s.t), sun: s.sun.elevation, sky })
+        else flush()
+      }
+      flush()
+      return d
+    }
+    return {
+      sun: build('sun'),
+      earth: build('earth'),
+      skyline: skyline(),
+      sunArea: sunArea(),
+    }
+  }, [samples, t0, t1, maxAbs, hasSkyline])
 
   const xTicks = useMemo(() => {
     const days = span / 86_400_000
@@ -143,7 +170,7 @@ export default function TimelineChart({
   }
 
   const tooltipX = marker ? x(marker.t) : 0
-  const tooltipRight = tooltipX > W - 250
+  const tooltipRight = tooltipX > W - 280
 
   return (
     <div className="chart-wrap">
@@ -209,6 +236,7 @@ export default function TimelineChart({
         {/* Sun arc + lit area */}
         <g clipPath="url(#plot)">
           <path d={paths.sunArea} fill="url(#sunFill)" />
+          {hasSkyline && <path d={paths.skyline} className="line-skyline" />}
           <path d={paths.sun} className="line-sun" />
           <path d={paths.earth} className="line-earth" />
         </g>
@@ -245,23 +273,27 @@ export default function TimelineChart({
             <line x1={x(marker.t)} x2={x(marker.t)} y1={M.top} y2={M.top + INNER_H} className="crosshair" />
             <circle cx={x(marker.t)} cy={y(marker.sun.elevation)} r={4} className="dot-sun" />
             <circle cx={x(marker.t)} cy={y(marker.earth.elevation)} r={4} className="dot-earth" />
-            <g transform={`translate(${tooltipRight ? tooltipX - 208 : tooltipX + 12}, ${M.top + 6})`}>
-              <rect width={196} height={104} rx={8} className="tooltip-box" />
+            <g transform={`translate(${tooltipRight ? tooltipX - 238 : tooltipX + 12}, ${M.top + 6})`}>
+              <rect width={226} height={104} rx={8} className="tooltip-box" />
               <text x={10} y={18} className="tooltip-time">
                 {formatUtc(marker.t)}
                 {hovered ? '' : ' · pinned'}
               </text>
               <circle cx={14} cy={36} r={3} className="dot-sun" />
               <text x={24} y={40} className="tooltip-line">
-                Sun {deg(marker.sun.elevation)} · az {marker.sun.azimuth.toFixed(0)}°
+                Sun {deg(marker.sun.elevation)} · sky{' '}
+                {deg(marker.sun.horizonDeg ?? -(marker.horizonDipDeg ?? 0))} · az{' '}
+                {marker.sun.azimuth.toFixed(0)}°
               </text>
               <circle cx={14} cy={56} r={3} className="dot-earth" />
               <text x={24} y={60} className="tooltip-line">
-                Earth {deg(marker.earth.elevation)} · az {marker.earth.azimuth.toFixed(0)}°
+                Earth {deg(marker.earth.elevation)} · sky{' '}
+                {deg(marker.earth.horizonDeg ?? -(marker.horizonDipDeg ?? 0))} · az{' '}
+                {marker.earth.azimuth.toFixed(0)}°
               </text>
               <text x={10} y={80} className="tooltip-sub">
                 {marker.sunlit ? 'Sunlit' : 'In shadow'} ·{' '}
-                {marker.earthVisible ? 'D2E link open' : 'Earth below horizon'}
+                {marker.earthVisible ? 'D2E link open' : 'Earth below skyline'}
               </text>
               <text x={10} y={96} className="tooltip-sub">
                 Earth dist. {(marker.earth.distanceKm / 1000).toFixed(0)}k km
@@ -273,17 +305,24 @@ export default function TimelineChart({
       <div className="chart-legend">
         <span><i className="swatch sun" /> Solar elevation</span>
         <span><i className="swatch earth" /> Earth elevation</span>
+        {hasSkyline && <span><i className="swatch skyline" /> Skyline towards the Sun</span>}
         <span><i className="swatch band" /> Direct-to-Earth windows</span>
         <span className="legend-hint">Hover to inspect · click to pin a moment</span>
       </div>
       {marker && (
         <div className="hover-strip">
           <span>{formatUtc(marker.t)}</span>
-          <span>Sun {deg(marker.sun.elevation)}</span>
-          <span>Earth {deg(marker.earth.elevation)}</span>
+          <span>
+            Sun {deg(marker.sun.elevation)} · sky{' '}
+            {deg(marker.sun.horizonDeg ?? -(marker.horizonDipDeg ?? 0))}
+          </span>
+          <span>
+            Earth {deg(marker.earth.elevation)} · sky{' '}
+            {deg(marker.earth.horizonDeg ?? -(marker.horizonDipDeg ?? 0))}
+          </span>
           <span>
             {marker.sunlit ? '☀ in sunlight' : '☾ in shadow'} ·{' '}
-            {marker.earthVisible ? '📡 Earth link open' : '📡 Earth below horizon'}
+            {marker.earthVisible ? '📡 Earth link open' : '📡 Earth below skyline'}
           </span>
         </div>
       )}

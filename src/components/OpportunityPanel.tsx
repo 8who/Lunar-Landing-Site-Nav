@@ -15,8 +15,6 @@ import { formatMonthDay, formatMonthYear, formatPercent, formatUtc } from '../li
 
 const DAY = 86_400_000
 const DURATIONS = [3, 5, 7, 10] as const
-/** Mast drags would restart the scan on every tick; settle before scoring. */
-const MAST_DEBOUNCE_MS = 250
 
 const LEVELS = [
   { level: 0, label: '<20' },
@@ -33,7 +31,6 @@ interface Props {
   t0: number
   /** Search horizon, days. */
   days: number
-  mastHeightM: number
   onOpen: (site: LunarSite, start: number) => void
 }
 
@@ -55,7 +52,7 @@ function cellTitle(cell: OpportunityCell): string {
   )} Earth — ${verdict}`
 }
 
-export default function OpportunityPanel({ sites, t0, days, mastHeightM, onOpen }: Props) {
+export default function OpportunityPanel({ sites, t0, days, onOpen }: Props) {
   const [durationDays, setDurationDays] = useState(5)
   const [minJoint, setMinJoint] = useState(DEFAULT_OPPORTUNITY_CONSTRAINTS.minJointPct)
   const [minSun, setMinSun] = useState(DEFAULT_OPPORTUNITY_CONSTRAINTS.minSunlitPct)
@@ -67,13 +64,6 @@ export default function OpportunityPanel({ sites, t0, days, mastHeightM, onOpen 
 
   const [grid, setGrid] = useState<OpportunityGrid | null>(null)
   const [done, setDone] = useState(0)
-
-  // The mast barely moves the numbers at 3 h resolution; wait for the drag to settle.
-  const [settledMast, setSettledMast] = useState(mastHeightM)
-  useEffect(() => {
-    const timer = setTimeout(() => setSettledMast(mastHeightM), MAST_DEBOUNCE_MS)
-    return () => clearTimeout(timer)
-  }, [mastHeightM])
 
   const horizonMs = days * DAY
   const durationMs = query.durationDays * DAY
@@ -90,7 +80,7 @@ export default function OpportunityPanel({ sites, t0, days, mastHeightM, onOpen 
     }
 
     const starts = buildStarts(t0, t0 + horizonMs, durationMs, startStepMs)
-    const shortlist = sites.map((site) => ({ ...site, mastHeightM: settledMast }))
+    const shortlist = sites
     setGrid({ sites: shortlist, starts, cells: [] })
     setDone(starts.length === 0 ? shortlist.length : 0)
 
@@ -120,7 +110,7 @@ export default function OpportunityPanel({ sites, t0, days, mastHeightM, onOpen 
       cancelled = true
       if (timer) clearTimeout(timer)
     }
-  }, [t0, horizonMs, durationMs, startStepMs, tooLong, query, sites, settledMast])
+  }, [t0, horizonMs, durationMs, startStepMs, tooLong, query, sites])
 
   const cellMap = useMemo(() => {
     const map = new Map<string, OpportunityCell>()
@@ -408,8 +398,10 @@ export default function OpportunityPanel({ sites, t0, days, mastHeightM, onOpen 
           )}
 
           <p className="opp-footnote">
-            Coarse search at 3 h sampling with a flat horizon. Open a result for the exact 15 min
-            timeline; polar percentages remain preliminary until LOLA horizon masks are applied.
+            Coarse search at 3 h sampling with the{' '}
+            {sites.some((s) => s.horizon) ? 'LOLA terrain skyline' : 'flat-horizon model'}. Open a
+            result for the exact 15 min timeline; polar percentages remain preliminary because the
+            0.25° grid cannot resolve a lander-scale ridge.
           </p>
         </>
       )}

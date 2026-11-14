@@ -597,6 +597,15 @@ button {
   stroke-linejoin: round;
 }
 
+/* Terrain skyline: a boundary the Sun must clear, not a fourth data series. */
+.line-skyline {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.46);
+  stroke-width: 1.1;
+  stroke-dasharray: 3 3;
+  stroke-linejoin: round;
+}
+
 .lane-bg {
   fill: rgba(255, 255, 255, 0.09);
 }
@@ -673,6 +682,10 @@ button {
 .swatch.band {
   background: rgba(92, 200, 255, 0.35);
   height: 8px;
+}
+.swatch.skyline {
+  background: rgba(255, 255, 255, 0.46);
+  height: 1px;
 }
 
 .legend-hint {

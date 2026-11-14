@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { renderMissionBrief } from '../lib/missionBrief'
 import { findMissionWindow } from '../lib/astro/mission'
+import { compassPoint16 } from '../lib/astro/panel'
 import type { LunarSite, TimeWindow } from '../lib/astro/types'
 import { formatDuration, formatUtc } from '../lib/format'
 
@@ -46,7 +47,17 @@ export default function MissionPlanner({ site, windows, now, end, onJump }: Prop
         <button disabled={!next || next.start === now} onClick={() => next && onJump(next.start)}>{next?.start === now ? 'At window start ✓' : 'Jump to window →'}</button>
         <button onClick={downloadBrief}>Download briefing (HTML) ↓</button>
       </div>
-      <p className="mission-assumption">Flat-horizon estimate · Terrain and relay links not modelled · Visibility does not guarantee power or a working radio link.</p>
+      <p className="mission-assumption">
+        {site.horizon
+          ? `LOLA terrain skyline · 0.25° grid, 3° azimuth bins · ${
+              site.horizon.maxElevationDeg > 0
+                ? `highest ${site.horizon.maxElevationDeg.toFixed(1)}° towards ${compassPoint16(
+                    site.horizon.maxAzimuthDeg,
+                  )}`
+                : 'smooth limb'
+            } · Relay links not modelled · Visibility does not guarantee power or a working radio link.`
+          : 'Flat-horizon estimate · Terrain and relay links not modelled · Visibility does not guarantee power or a working radio link.'}
+      </p>
     </section>
   )
 }

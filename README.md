@@ -36,7 +36,8 @@ what you were looking at.
 - **What you would see**: first-person sky from the site at the chosen instant,
   standing on a 300 km patch of real LOLA terrain sampled around the site. Earth
   is a textured 3D globe (Blue Marble day / Black Marble night) with a live
-  terminator, and the three Deep Space Network complexes are drawn on it.
+  terminator, and the three Deep Space Network complexes are drawn on it. The
+  same elevation grid sets the skyline that the sunlight and link flags use.
 - **Solar array card**: recommended tilt, 16-point heading, the azimuth turn rate
   a Sun-tracking array needs, and average W/m².
 - **Mission-window planner**: searches 1–72 hours of continuous sunlight plus
@@ -45,9 +46,9 @@ what you were looking at.
 
 ### Expert
 
-- **Timeline chart**: Sun and Earth elevation above the local horizon, sunlight
-  and link lanes, shaded direct-to-Earth bands, hover readout with azimuth and
-  Earth distance, and a click that pins the instant for the sky view.
+- **Timeline chart**: Sun and Earth elevation above the local skyline, sunlight
+  and link lanes, shaded direct-to-Earth bands, hover readout with azimuth,
+  skyline and Earth distance, and a click that pins the instant for the sky view.
 - **Ranking**: the seven south-pole candidates scored over the same range at 1 h
   resolution, sortable by sunlight %, Earth-link %, both %, or longest unbroken
   link. Click a row to open that site.
@@ -62,9 +63,10 @@ what you were looking at.
   scroll to zoom, and station labels appear once the field of view is narrow
   enough.
 
-**Mast height** (0–20 m) is set in the header and applies to both views: the
-horizon drops by `acos(R/(R+h))`, 0.19° at 10 m, and that dip feeds sunlight,
-Earth visibility, power, the fixed-panel search and the ranking.
+**Mast height** (0–20 m) is set in the header and applies to both views: it lifts
+the eye above the terrain skyline, lowering the horizon in every direction, and
+that skyline feeds sunlight, Earth visibility, power, the fixed-panel search and
+the ranking.
 
 ## Quick start
 
@@ -102,8 +104,8 @@ lighting and link studies, not to be quoted as a precise landing solution.
 | Sun/Moon position | `astronomy-engine` (VSOP87 / ELP-2000 series), geometric J2000 vectors |
 | Moon body-fixed frame | IAU WGCCRE 2015 orientation (pole + W) with periodic libration terms |
 | Observer position | The site's own radius vector is used explicitly; from the surface, Earth's parallax reaches 0.26°, about half of Earth's own apparent diameter, so the Moon-centre direction is not enough |
-| Horizon | Local tangent plane, lowered by the mast dip; **no atmospheric refraction** (the Moon has no atmosphere) |
-| Sunlight | Upper limb of the 0.53° solar disc above the horizon; a partly risen Sun still lights the site, weighted by visible-disc area |
+| Horizon | Terrain skyline from the LOLA `ldem_4` grid: 120 azimuth bins (3°), radial march to 400 km with exact lunar curvature, the eye raised by the mast. Falls back to the flat tangent plane while the grid loads or if it fails |
+| Sunlight | Upper limb of the 0.53° solar disc above the skyline; a partly risen Sun still lights the site, weighted by visible-disc area |
 | Power | Visible-disc fraction × incidence × (1 AU / r)², for a vertical Sun-tracking array (cos e, polar-lander practice) and a flat panel (sin e). A flat panel at the pole gets ~1% of the solar constant; a vertical one ~50% |
 | Fixed panel | Score = integral of max(0, normal · Sun) over the range, relative to a perfect two-axis Sun-tracking panel; searched on a 1° tilt × 10° azimuth grid |
 | Earth in the sky | Textured globe oriented from Greenwich sidereal time plus precession/nutation into the site frame; matches the sub-lunar point to < 0.4° |
@@ -118,10 +120,14 @@ Two consequences worth stating plainly:
   rotated into the body-fixed frame, so the sub-Earth point wanders out of the
   rotation model itself. That drift is exactly what makes Earth visibility from a
   polar site time dependent.
-- **The flat horizon is the dominant caveat at the poles.** Inside a few degrees
-  of the pole the Sun circles the sky instead of rising and setting, so local
-  relief — not the ephemeris — decides who sees sunlight and who sees Earth.
-  Sites at `|lat| ≥ 80°` are flagged in the UI for this reason.
+- **Terrain, not the ephemeris, decides polar lighting.** Inside a few degrees of
+  the pole the Sun circles the sky instead of rising and setting, so a crater rim
+  two degrees high sets whether a site is lit at all. The skyline comes from the
+  LOLA grid, which is why a floor site and a rim site can differ by tens of
+  percent while their ephemerides are identical.
+- **The grid is 0.25°, about 7.6 km north–south.** It shows massifs and crater
+  rims, not the ridge beside a lander; sites at `|lat| ≥ 80°` stay flagged in the
+  UI and polar percentages are still called preliminary.
 
 ## Validation
 
@@ -139,15 +145,17 @@ expected; elevation tolerance is 0.02°, azimuth 0.05°, Earth distance 100 km.
 | Sub-Earth point at ten epochs across a libration cycle | < 0.02° in latitude and longitude |
 | Apollo 11 landing, 1969-07-20 20:17 UTC | Sun ≈ 10.7°, matching the historical record |
 
-`npm test` runs 12 files / 65 tests:
+`npm test` runs 14 files / 89 tests:
 
 | File | Covers |
 | --- | --- |
 | `horizons.test.ts` | the JPL comparison and the physical sanity anchors above |
+| `horizon.test.ts` | skyline from a synthetic grid: curvature, crater rims, mast, azimuth interpolation, flat-model fallback |
 | `timeline.test.ts` | sampling, horizon crossings, window edges, metrics |
 | `earthView.test.ts` | Earth orientation, DSN geometry, station coverage |
 | `panel.test.ts`, `power.test.ts`, `mast.test.ts` | fixed vs tracking power, mast dip, pointing |
 | `ranking.test.ts` | far side reports 0% direct-to-Earth, sort keys, one row per site |
+| `opportunity.test.ts` | mission-length search, start grid, closest attempts |
 | `sites.test.ts` | coordinate provenance, east-positive longitudes, unique ids |
 | `globeMath.test.ts`, `scrub.test.ts`, `terrain.test.ts`, `mission.test.ts` | globe framing, scrub conversions, LOLA interpolation, mission-window search |
 
@@ -158,7 +166,8 @@ src/
   lib/astro/          ephemeris and geometry — no React, no Three.js
     vec.ts            vector helpers
     lunarFrame.ts     IAU Moon orientation, body-fixed <-> selenographic frames
-    observer.ts       topocentric Sun/Earth geometry, horizon dip, disc visibility
+    observer.ts       topocentric Sun/Earth geometry, skyline flags, disc visibility
+    horizon.ts        LOLA terrain skyline: azimuth bins, curvature march
     timeline.ts       sampling, window search, metrics
     sites.ts          curated landing sites, terrain-critical flag
     ranking.ts        score many sites over one range
@@ -167,11 +176,13 @@ src/
     globeMath.ts      lat/lon <-> lunar vector, yaw to face a longitude
     earthView.ts      Earth orientation in the lunar sky, DSN stations
     mission.ts        continuous-operation window search
+    opportunity.ts    site x start-date calendar search
     terrain.ts        LOLA elevation grid sampling
     types.ts          shared types
   lib/
     format.ts         duration / angle / UTC formatting
     missionBrief.ts   printable HTML mission brief
+    terrainData.ts    one shared download of the elevation grid
   components/
     MoonGlobe.tsx     three.js Moon with the real LRO map
     SkyView.tsx       first-person horizon view (three.js), Earth, DSN, zoom
@@ -180,6 +191,7 @@ src/
     RankingTable.tsx  sortable candidate ranking
     ArrayPower.tsx    solar array and fixed-panel cards
     MissionPlanner.tsx operation-window search and brief download
+    OpportunityPanel.tsx site x start-date calendar for the inverse search
   modes/
     ExplorerMode.tsx  globe, scrubber, sky, plain-language verdict
     ExpertMode.tsx    timeline, ranking, panel analysis, sky
@@ -198,7 +210,8 @@ public/
 - **Ephemerides**: JPL Horizons / DE441 for validation; `astronomy-engine` for the
   runtime.
 - **Terrain**: NASA Scientific Visualization Studio CGI Moon Kit, LOLA `ldem_4`
-  resampled to 0.25° (~7.6 km). Provenance in `public/TERRAIN_SOURCES.md`.
+  resampled to 0.25° (~7.6 km). It drives the skyline used by the metrics, not
+  just the sky view. Provenance in `public/TERRAIN_SOURCES.md`.
 - **Earth and Moon imagery**: NASA Blue Marble / Black Marble and the LRO colour
   map, both from NASA SVS.
 - **Landing site coordinates**: published mission coordinates and landing-site
@@ -206,10 +219,15 @@ public/
 
 ## Limits
 
-- **Metrics are flat-horizon.** No terrain masking yet: polar percentages are a
-  proxy, and Shackleton's real near-continuous illumination comes from relief that
-  this model does not have. The 300 km LOLA patch in the sky view is visual only
-  and its 0.25° grid cannot resolve landing-scale hazards.
+- **The skyline is real but coarse.** The grid is 0.25° (7.6 km) and the march is
+  sampled every 1–4 km out to 400 km, so massifs and crater rims are captured,
+  a ridge beside the lander is not. Polar percentages stay preliminary, and
+  Shackleton's near-continuous illumination is not reproduced if the catalogued
+  coordinate lands on the crater wall rather than the true rim crest.
+- The grid supplies the ground datum wherever a skyline exists, so the site's
+  catalogue elevation is replaced by the interpolated LOLA value (a kilometre or
+  more at the poles). Without the grid the flat tangent plane and the catalogue
+  elevation are used.
 - The sky view exaggerates angular sizes ×3 (minimum 0.5°) so the Sun and Earth
   stay visible at a 70° field of view; the caption says so.
 - One site at a time: the ranking compares metrics, not side-by-side charts.

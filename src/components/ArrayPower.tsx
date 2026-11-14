@@ -38,9 +38,20 @@ export function useTrackingPointing(site: LunarSite, t: number) {
   }, [observer, t])
 }
 
-/** "Mast 2 m · horizon 0.09° lower" */
+/**
+ * Mast readout. A terrain skyline is not the tangent plane, so quote its
+ * highest point; without a profile, fall back to the geometric mast dip.
+ */
 export function mastLine(site: LunarSite, dipDeg: number | undefined): string {
   const mast = site.mastHeightM ?? 0
+  if (site.horizon) {
+    const { maxElevationDeg, maxAzimuthDeg } = site.horizon
+    const skyline =
+      maxElevationDeg > 0
+        ? `skyline up to ${maxElevationDeg.toFixed(1)}° towards ${compassPoint16(maxAzimuthDeg)}`
+        : `skyline ${maxElevationDeg.toFixed(2)}° (smooth limb)`
+    return `Mast ${mast} m · ${skyline}`
+  }
   return dipDeg && dipDeg > 0
     ? `Mast ${mast} m · horizon ${dipDeg.toFixed(2)}° lower`
     : `Mast ${mast} m · horizon at ground level`
@@ -89,7 +100,7 @@ export default function ArrayCard({
           </div>
         </div>
       ) : (
-        <p className="muted-line">Sun below the horizon: nothing to point at, the lander runs on batteries.</p>
+        <p className="muted-line">Sun below the skyline: nothing to point at, the lander runs on batteries.</p>
       )}
 
       <ArrayPowerBars rows={rows} caption={`Average power per m² · ${rangeLabel}`} />

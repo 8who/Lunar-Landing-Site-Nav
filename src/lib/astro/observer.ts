@@ -2,23 +2,29 @@
  * Sky geometry as seen from a point on the lunar surface.
  *
  * Everything is computed in the lunar body-fixed (selenographic) frame, so the
- * local horizon is simply the plane perpendicular to the site's radius vector.
+ * local horizon is the plane perpendicular to the site's radius vector, raised
+ * or lowered by the terrain skyline when `site.horizon` is present.
  *
- * Two geometric subtleties that matter at the Moon:
- *  1. No atmosphere -> the horizon is exactly the local tangent plane (plus
- *     terrain, handled separately). No refraction.
+ * Three geometric subtleties that matter at the Moon:
+ *  1. No atmosphere -> no refraction. The horizon is purely geometric: the
+ *     terrain profile from LOLA when available, else the smooth-sphere dip.
  *  2. The observer is up to 1738 km off the Moon's centre. For Earth that is
  *     ~0.26 deg of parallax, i.e. half of Earth's own apparent diameter. We
  *     therefore use the site position, not the Moon's centre.
+ *  3. The Sun is 0.53 deg across and skims the horizon at the poles, so
+ *     "some of the disc above the skyline" is the meaningful test. Earth uses
+ *     its centre, the app's documented convention.
  */
 
 import { Body, GeoVector, MakeTime } from 'astronomy-engine'
+import { horizonAt, MOON_RADIUS_KM } from './horizon'
 import { bodyBasis, moonOrientation, toBody, toSelenographic } from './lunarFrame'
 import { DEG, RAD, cross, dot, normalize, scale, sub, vec, type Vec3 } from './vec'
 import type { LunarSite, SkyDirection, SkySample } from './types'
 
+export { MOON_RADIUS_KM }
+
 export const KM_PER_AU = 149_597_870.7
-export const MOON_RADIUS_KM = 1737.4
 const SUN_RADIUS_KM = 695_700
 const EARTH_RADIUS_KM = 6371.0
 
@@ -89,7 +95,8 @@ export function discFractionAbove(elevationDeg: number, radiusDeg: number): numb
 /**
  * Geometric horizon dip for an eye `heightM` above a sphere of radius
  * `groundRadiusKm`: acos(R / (R + h)), in degrees. No atmosphere on the Moon,
- * so no refraction correction.
+ * so no refraction correction. This is the flat-ground fallback: with a
+ * terrain profile the skyline replaces it.
  */
 export function horizonDipDeg(heightM: number, groundRadiusKm = MOON_RADIUS_KM): number {
   if (!(heightM > 0)) return 0
@@ -106,23 +113,33 @@ export interface SiteObserver {
   skyAt(date: Date | number): SkySample
   /** Sun centre elevation only (cheap path for window searches) */
   sunElevation(date: Date | number): number
-  /** Any part of the solar disc above the horizon seen from the mast top */
+  /** Any part of the solar disc above the skyline seen from the mast top */
   sunVisible(date: Date | number): boolean
-  /** Earth's centre above the horizon seen from the mast top (antenna line of sight) */
+  /** Earth's centre above the skyline seen from the mast top (antenna line of sight) */
   earthVisible(date: Date | number): boolean
-  /** Horizon dip at the mast top, deg */
+  /** Flat-model horizon dip at the mast top, deg (for the mast readout) */
   horizonDipDeg: number
+  /** Horizon elevation towards a compass azimuth, deg (terrain or flat) */
+  horizonElevation(azimuthDeg: number): number
   /** Earth elevation only (cheap path for window searches) */
   earthElevation(date: Date | number): number
 }
 
 export function createObserver(site: LunarSite): SiteObserver {
-  const frame = localFrame(site)
-  const groundRadiusKm = MOON_RADIUS_KM + (site.elevationM ?? 0) / 1000
+  // The LOLA grid sets the ground when a terrain profile is attached: the
+  // profile and the sky then share one datum. Without it, use the catalogue
+  // elevation and the flat-horizon dip.
+  const terrain = site.horizon
+  const elevationM = terrain ? terrain.groundElevationM : (site.elevationM ?? 0)
+  const frame = localFrame({ ...site, elevationM })
+  const groundRadiusKm = MOON_RADIUS_KM + elevationM / 1000
   const mastM = Math.max(0, site.mastHeightM ?? 0)
   const dip = horizonDipDeg(mastM, groundRadiusKm)
   // Observer sits at the top of the mast.
   const rSite = scale(frame.up, groundRadiusKm + mastM / 1000)
+
+  const horizonElevation = (azimuthDeg: number) =>
+    terrain ? horizonAt(terrain, azimuthDeg) : -dip
 
   const relativeVectors = (date: Date | number) => {
     const t = MakeTime(date instanceof Date ? date : new Date(date))
@@ -150,12 +167,19 @@ export function createObserver(site: LunarSite): SiteObserver {
 
   const sunVisible = (date: Date | number) => {
     const { sunRel } = relativeVectors(date)
+    const u = normalize(sunRel)
     const d = Math.sqrt(dot(sunRel, sunRel))
-    const elev = Math.asin(Math.max(-1, Math.min(1, dot(normalize(sunRel), frame.up)))) * DEG
-    return elev > -dip - Math.atan(SUN_RADIUS_KM / d) * DEG
+    const elev = Math.asin(Math.max(-1, Math.min(1, dot(u, frame.up)))) * DEG
+    const azimuth = azimuthOf(u, frame)
+    return elev > horizonElevation(azimuth) - Math.atan(SUN_RADIUS_KM / d) * DEG
   }
 
-  const earthVisible = (date: Date | number) => earthElevation(date) > -dip
+  const earthVisible = (date: Date | number) => {
+    const { earthRel } = relativeVectors(date)
+    const u = normalize(earthRel)
+    const elev = Math.asin(Math.max(-1, Math.min(1, dot(u, frame.up)))) * DEG
+    return elev > horizonElevation(azimuthOf(u, frame))
+  }
 
   const earthElevation = (date: Date | number) => {
     const { earthRel } = relativeVectors(date)
@@ -168,20 +192,29 @@ export function createObserver(site: LunarSite): SiteObserver {
     sunVisible,
     earthVisible,
     horizonDipDeg: dip,
+    horizonElevation,
     earthElevation,
     skyAt(date) {
       const { sunRel, earthRel } = relativeVectors(date)
       const sun = direction(sunRel, frame, SUN_RADIUS_KM)
       const earth = direction(earthRel, frame, EARTH_RADIUS_KM)
+      const sunHorizon = horizonElevation(sun.azimuth)
+      const earthHorizon = horizonElevation(earth.azimuth)
       return {
         t: (date instanceof Date ? date : new Date(date)).getTime(),
-        sun,
-        earth,
-        horizonDipDeg: dip,
-        // Upper limb above the horizon: a partly risen Sun still lights the site.
-        sunlit: sun.elevation > -dip - sun.angularDiameterDeg / 2,
-        earthVisible: earth.elevation > -dip,
+        sun: { ...sun, horizonDeg: sunHorizon },
+        earth: { ...earth, horizonDeg: earthHorizon },
+        horizonDipDeg: terrain ? undefined : dip,
+        // Upper limb above the skyline: a partly risen Sun still lights the site.
+        sunlit: sun.elevation > sunHorizon - sun.angularDiameterDeg / 2,
+        earthVisible: earth.elevation > earthHorizon,
       }
     },
   }
+}
+
+/** Compass azimuth of a unit vector in the local frame, deg from north. */
+function azimuthOf(u: Vec3, frame: ReturnType<typeof localFrame>): number {
+  const azimuth = Math.atan2(dot(u, frame.east), dot(u, frame.north)) * DEG
+  return azimuth < 0 ? azimuth + 360 : azimuth
 }

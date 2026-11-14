@@ -155,19 +155,30 @@ export function buildTimeline(
 
   const rad = Math.PI / 180
   const dip = observer.horizonDipDeg
+  // Skyline per sample: terrain when present, flat dip otherwise. Both are in
+  // the same frame, so a single subtraction replaces the flat-horizon term.
+  const sunHorizon = (s: SkySample) => s.sun.horizonDeg ?? -dip
+  const earthHorizon = (s: SkySample) => s.earth.horizonDeg ?? -dip
   for (let i = 1; i < samples.length; i++) {
     const dt = samples[i].t - samples[i - 1].t
     const a = samples[i - 1]
     const b = samples[i]
     const rSun = (a.sun.angularDiameterDeg + b.sun.angularDiameterDeg) / 4
     // Linear interpolation of the horizon crossing inside each step. The Sun
-    // counts as up while its upper limb is above the horizon.
-    sunlitMs += dt * fractionAbove(a.sun.elevation + dip + rSun, b.sun.elevation + dip + rSun)
-    commMs += dt * fractionAbove(a.earth.elevation + dip, b.earth.elevation + dip)
+    // counts as up while its upper limb is above the skyline.
+    sunlitMs += dt * fractionAbove(
+      a.sun.elevation - sunHorizon(a) + rSun,
+      b.sun.elevation - sunHorizon(b) + rSun,
+    )
+    commMs += dt * fractionAbove(
+      a.earth.elevation - earthHorizon(a),
+      b.earth.elevation - earthHorizon(b),
+    )
     if (a.sunlit && b.sunlit && a.earthVisible && b.earthVisible) jointMs += dt
 
     const midElev = (a.sun.elevation + b.sun.elevation) / 2
-    const visible = discFractionAbove(midElev + dip, rSun)
+    const midHorizon = (sunHorizon(a) + sunHorizon(b)) / 2
+    const visible = discFractionAbove(midElev - midHorizon, rSun)
     const auRatio = KM_PER_AU / ((a.sun.distanceKm + b.sun.distanceKm) / 2)
     const flux = visible * auRatio * auRatio
     if (visible > 0) {

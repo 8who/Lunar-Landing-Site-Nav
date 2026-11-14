@@ -34,9 +34,9 @@ export const SITES: LunarSite[] = [
   { id: 'monsmouton', name: 'Mons Mouton (candidate)', lat: -84.6, lon: 31.0, category: 'candidate', note: 'Artemis candidate region', approx: true },
   { id: 'malapert', name: 'Malapert Massif (candidate)', lat: -86.0, lon: 2.9, category: 'candidate', note: 'Artemis candidate region', approx: true },
   { id: 'connectingridge', name: 'Connecting Ridge (candidate)', lat: -89.44, lon: 137.3, category: 'candidate', note: 'Artemis candidate region', approx: true },
-  { id: 'shackleton', name: 'Shackleton rim', lat: -89.66, lon: 129.2, category: 'candidate', note: 'Near-continuous illumination in reality; flat-horizon model here (terrain masks = next step)', approx: true },
+  { id: 'shackleton', name: 'Shackleton rim', lat: -89.66, lon: 129.2, category: 'candidate', note: 'Near-continuous illumination in reality; the catalogued point sits on the crater wall in the 0.25° grid', approx: true },
   { id: 'degerlache', name: 'de Gerlache rim', lat: -88.5, lon: -87.1, category: 'candidate', note: 'Artemis candidate region', approx: true },
-  { id: 'cabeus', name: 'Cabeus · LCROSS impact', lat: -84.675, lon: -48.725, category: 'candidate', note: 'Permanently shadowed crater floor: the flat-horizon model cannot show that (terrain masks needed)', source: 'LCROSS impact point, Schultz et al. 2010' },
+  { id: 'cabeus', name: 'Cabeus · LCROSS impact', lat: -84.675, lon: -48.725, category: 'candidate', note: 'Permanently shadowed crater floor: the terrain grid shows an 11° rim closing the horizon', source: 'LCROSS impact point, Schultz et al. 2010' },
   { id: 'southpole', name: 'Lunar South Pole', lat: -89.9, lon: 0, category: 'candidate', note: 'Reference point', approx: true },
 ]
 
@@ -51,8 +51,10 @@ export const SITE_GROUPS: { id: string; label: string }[] = [
 /**
  * Beyond ~80 deg latitude the Sun and Earth skim the horizon, so local relief
  * (kilometre-high crater rims, massifs) decides lighting and line of sight more
- * than the ephemeris does. Flat-horizon numbers there are only a first guess:
- * crests can be lit >80% of the time, crater floors never.
+ * than the ephemeris does. The app uses the LOLA grid to build a skyline per
+ * site; without it (grid still loading or unavailable) the numbers fall back to
+ * a flat horizon and are only a first guess: crests can be lit >80% of the time,
+ * crater floors never.
  */
 export const TERRAIN_CRITICAL_LAT = 80
 

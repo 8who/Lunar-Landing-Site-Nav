@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { createLunarTerrain } from './lunarTerrain'
+import { loadTerrainGrid } from '../lib/terrainData'
 import { createObserver } from '../lib/astro/observer'
 import {
   DSN_MIN_ELEVATION_DEG,
@@ -12,7 +13,7 @@ import {
   type DsnStatus,
   type EarthAxes,
 } from '../lib/astro/earthView'
-import { panelNormalSky, tiltArcPoints } from '../lib/astro/panel'
+import { panelNormalSky, compassPoint16, tiltArcPoints } from '../lib/astro/panel'
 import { isTerrainCritical } from '../lib/astro/sites'
 import type { LunarSite, SkySample } from '../lib/astro/types'
 import { deg } from '../lib/format'
@@ -405,18 +406,17 @@ export default function SkyView({ site, t, panel }: Props) {
 
     let terrain: ReturnType<typeof createLunarTerrain> | null = null
     let terrainDisposed = false
-    const abortTerrain = new AbortController()
     setTerrainStatus('Loading NASA terrain…')
     const terrainMap = new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}moon-terrain-4k.jpg`, () => { dirty = true })
     terrainMap.colorSpace = THREE.SRGBColorSpace
     terrainMap.wrapS = THREE.RepeatWrapping
     terrainMap.anisotropy = renderer.capabilities.getMaxAnisotropy()
-    fetch(`${import.meta.env.BASE_URL}moon-elevation.f32`, { signal: abortTerrain.signal })
-      .then(response => { if (!response.ok) throw new Error('Elevation unavailable'); return response.arrayBuffer() })
-      .then(buffer => {
+    // Same shared download the horizon profile uses: one 4 MB request, not two.
+    loadTerrainGrid()
+      .then(grid => {
         if (terrainDisposed) return
-        if (buffer.byteLength !== 1440 * 720 * 4) throw new Error('Invalid elevation grid')
-        terrain = createLunarTerrain(new Float32Array(buffer), site, terrainMap)
+        if (!grid) throw new Error('Elevation unavailable')
+        terrain = createLunarTerrain(grid, site, terrainMap)
         terrain.material.opacity = groundMaterial.opacity
         terrain.material.depthWrite = groundMaterial.depthWrite
         terrain.traverse(object => {
@@ -629,7 +629,6 @@ export default function SkyView({ site, t, panel }: Props) {
 
     return () => {
       terrainDisposed = true
-      abortTerrain.abort()
       terrain?.material.bumpMap?.dispose()
       terrainMap.dispose()
       controlsRef.current = () => {}
@@ -686,11 +685,12 @@ export default function SkyView({ site, t, panel }: Props) {
         {sky && (
           <div className="sky-overlay">
             <p className={sky.sunlit ? 'sun-text' : 'bad-text'}>
-              Sun: {sky.sunlit ? 'visible' : 'below horizon'} (elev {deg(sky.sun.elevation)})
+              Sun: {sky.sunlit ? 'visible' : 'below skyline'} (elev {deg(sky.sun.elevation)} · skyline{' '}
+              {deg(sky.sun.horizonDeg ?? -(sky.horizonDipDeg ?? 0))})
             </p>
             <p className={sky.earthVisible ? 'earth-text' : 'bad-text'}>
-              Earth: {sky.earthVisible ? 'visible' : 'below horizon'} (elev{' '}
-              {deg(sky.earth.elevation)})
+              Earth: {sky.earthVisible ? 'visible' : 'below skyline'} (elev{' '}
+              {deg(sky.earth.elevation)} · skyline {deg(sky.earth.horizonDeg ?? -(sky.horizonDipDeg ?? 0))})
             </p>
             {panel && (
               <p className="panel-text">
@@ -713,12 +713,18 @@ export default function SkyView({ site, t, panel }: Props) {
       </div>
       {seeThrough && <div className="sky-cutaway" role="status">
         <strong>See-through ground · illustration only</strong>
-        <span>{sky?.sunlit ? 'Sunlight available geometrically' : 'Sun below horizon: no direct sunlight'}</span>
-        <span>{sky?.earthVisible ? 'Earth above horizon' : 'Earth below horizon: no direct Earth communication'}</span>
+        <span>{sky?.sunlit ? 'Sunlight available geometrically' : 'Sun below the skyline: no direct sunlight'}</span>
+        <span>{sky?.earthVisible ? 'Earth above the skyline' : 'Earth below the skyline: no direct Earth communication'}</span>
       </div>}
-      <p className="sky-caption">{terrainStatus} · Terrain is visual only; visibility uses a geometric horizon · Scroll to zoom ·
-
-        Angular sizes exaggerated ×{SIZE_BOOST} (minimum {MIN_SIZE_DEG}°), not to scale
+      <p className="sky-caption">
+        {terrainStatus}
+        {site.horizon
+          ? ` · visibility uses the same LOLA skyline (highest ${site.horizon.maxElevationDeg.toFixed(
+              1,
+            )}° towards ${compassPoint16(site.horizon.maxAzimuthDeg)})`
+          : ' · visibility currently uses a flat geometric horizon'}{' '}
+        · Scroll to zoom · Angular sizes exaggerated ×{SIZE_BOOST} (minimum {MIN_SIZE_DEG}°), not to
+        scale
       </p>
       </div>
       {dsn.length > 0 && (

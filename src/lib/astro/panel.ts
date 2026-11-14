@@ -101,11 +101,14 @@ export function bestFixedPanel(samples: SkySample[]): {
     if (!(dt > 0)) continue
     const midElevation = (a.sun.elevation + b.sun.elevation) / 2
     // Same limb criterion as timeline: the Sun counts while any part of its
-    // disc is above the flat horizon, and a partial disc contributes pro rata.
+    // disc is above the skyline, and a partial disc contributes pro rata.
     const rSun = (a.sun.angularDiameterDeg + b.sun.angularDiameterDeg) / 4
-    // A mast lowers the horizon: the Sun is visible down to -dip.
-    const dip = a.horizonDipDeg ?? 0
-    const visible = discFractionAbove(midElevation + dip, rSun)
+    // Terrain skyline when present, otherwise the flat mast dip (-dip).
+    const horizon =
+      ((a.sun.horizonDeg ?? -(a.horizonDipDeg ?? 0)) +
+        (b.sun.horizonDeg ?? -(b.horizonDipDeg ?? 0))) /
+      2
+    const visible = discFractionAbove(midElevation - horizon, rSun)
     if (visible <= 0) continue
 
     // Shortest signed azimuth step, so a pair straddling north interpolates

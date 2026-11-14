@@ -1,4 +1,5 @@
 import type { LunarSite, TimeWindow } from './astro/types'
+import { compassPoint16 } from './astro/panel'
 import { formatCoord, formatDuration, formatUtc } from './format'
 
 const escape = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
@@ -6,11 +7,20 @@ const escape = (value: string) => value.replace(/[&<>"']/g, c => ({ '&': '&amp;'
 /** Standalone, printable briefing with no external resources. */
 export function renderMissionBrief(site: LunarSite, now: number, end: number, hours: number, next?: TimeWindow): string {
   const field = (label: string, value: string) => `<div class="metric"><dt>${escape(label)}</dt><dd>${escape(value)}</dd></div>`
+  const horizon = site.horizon
+  const horizonModel = horizon
+    ? `Geometry uses a terrain horizon from the NASA LOLA ldem_4 elevation grid (0.25° cells, about 7.6 km), marched from the site out to 400 km in 3° azimuth bins with lunar curvature. It rises to ${horizon.maxElevationDeg.toFixed(1)}° towards ${compassPoint16(horizon.maxAzimuthDeg)}, ${horizon.maxDistanceKm.toFixed(0)} km away.`
+    : 'Geometry uses a flat horizon: the LOLA elevation grid was not available when this brief was generated.'
+  const polarNote = Math.abs(site.lat) >= 80
+    ? horizon
+      ? 'Polar site: terrain decides illumination here, and the grid cannot resolve a ridge at lander scale. Treat these windows as preliminary.'
+      : 'Polar site: terrain can dominate illumination. Treat these flat-horizon windows as preliminary estimates.'
+    : 'Visibility alone does not guarantee sufficient electrical power or a working radio link.'
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mission brief — ${escape(site.name)}</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#0a1020;color:#e8eefc;font:16px/1.6 system-ui,sans-serif}main{max-width:900px;margin:48px auto;padding:40px}header{border-top:4px solid #5cc8ff;padding-top:24px}small,.eyebrow{color:#5cc8ff;text-transform:uppercase;letter-spacing:.15em;font-size:11px}h1{font-size:42px;line-height:1.15;margin:14px 0}h2{font-size:20px;margin-top:32px}p{color:#b7c4da}.status{display:inline-block;padding:6px 12px;border:1px solid #5cc8ff;border-radius:24px;color:#5cc8ff}dl{display:grid;grid-template-columns:1fr 1fr;gap:16px}.metric{background:#141e32;border:1px solid #2c3950;border-radius:12px;padding:20px}dt{font-size:12px;color:#a8b8ce}dd{margin:8px 0 0;font-size:19px}footer{border-top:1px solid #2c3950;margin-top:32px;padding-top:16px;font-size:12px;color:#a8b8ce}@media(max-width:600px){main{margin:0;padding:24px}dl{grid-template-columns:1fr}h1{font-size:32px}}@media print{body{background:white;color:#122038}main{margin:0;padding:16px}.metric{background:#f4f7fa;break-inside:avoid}p,dt,footer{color:#394960}small,.status,.eyebrow{color:#146181}header{border-color:#146181}}
 </style></head><body><main><header><small>Lunar Landing Site Navigator · Mission briefing</small><h1>${escape(site.name)}</h1><p>${escape(formatCoord(site.lat, site.lon))} · ${site.approx ? 'Approximate coordinates' : site.category === 'custom' ? 'Custom coordinates' : 'Curated coordinates'}</p><span class="status">${next ? 'Matching visibility window' : 'No matching window in this search'}</span></header>
 <h2>Surface operation</h2><dl>${field('Requested duration', `${hours} hours`)}${field('Available overlap', next ? formatDuration(next.durationMs) + (!next.closed ? ' · clipped at search end' : '') : 'No match')}${field('Operation start (UTC)', next ? formatUtc(next.start) : 'Try another date or site')}${field('Operation end (UTC)', next ? formatUtc(next.start + hours * 3_600_000) : 'Try a shorter duration')}</dl>
 <h2>Search context</h2><p>${escape(formatUtc(now))} → ${escape(formatUtc(end))}</p><p>Criterion: continuous simultaneous sunlight and direct Earth visibility. Operation starts are rounded up to a selectable UTC minute.</p>
-<h2>Model and confidence</h2><p>Sunlight begins when the solar upper limb clears a flat horizon; this may be only partial sunlight. Earth visibility uses the Earth centre above that horizon. Terrain, slopes, relay links, thermal limits, power budgets and radio link budgets are not included.</p><p>${Math.abs(site.lat) >= 80 ? 'Polar site: terrain can dominate illumination. Treat these flat-horizon windows as preliminary estimates.' : 'Visibility alone does not guarantee sufficient electrical power or a working radio link.'}</p><p>Coordinate source: ${escape(site.source || 'Not specified in the site catalogue.')}</p><footer>Geometric screening only · Not a landing safety assessment<br>Generated ${escape(formatUtc(Date.now()))} · Open in a browser and use Print / Save as PDF.</footer></main></body></html>`
+<h2>Model and confidence</h2><p>${horizonModel} Sunlight begins when the solar upper limb clears that skyline; this may be only partial sunlight. Earth visibility uses the Earth centre above the same skyline. Relay links, thermal limits, power budgets and radio link budgets are not included.</p><p>${polarNote}</p><p>Coordinate source: ${escape(site.source || 'Not specified in the site catalogue.')}</p><footer>Geometric screening only · Not a landing safety assessment<br>Generated ${escape(formatUtc(Date.now()))} · Open in a browser and use Print / Save as PDF.</footer></main></body></html>`
 }

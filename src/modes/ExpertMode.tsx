@@ -6,7 +6,7 @@ import SkyView from '../components/SkyView'
 import MoonGlobe from '../components/MoonGlobe'
 import { buildTimeline } from '../lib/astro/timeline'
 import { rankSites, type RankSortKey, type RankedSite } from '../lib/astro/ranking'
-import { bestFixedPanel } from '../lib/astro/panel'
+import { bestFixedPanel, compassPoint16 } from '../lib/astro/panel'
 import { ArrayPowerBars, mastLine, useTrackingPointing } from '../components/ArrayPower'
 import { createObserver } from '../lib/astro/observer'
 import { SITES, customSite, isTerrainCritical } from '../lib/astro/sites'
@@ -22,6 +22,8 @@ export interface ExpertModeProps {
   onDayChange: (day: string) => void
   /** Shared instant from the Explorer; used when the timeline is not hovered */
   t: number
+  /** Attach the terrain skyline to a site (no-op while the grid is loading) */
+  horizonFor: (site: LunarSite) => LunarSite
 }
 
 const DAY = 86_400_000
@@ -42,7 +44,14 @@ const RANK_CACHE = new Map<string, RankedSite[]>()
 // south-pole candidate regions compete there.
 const RANK_SITES = SITES.filter((s) => s.category === 'candidate')
 
-export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: ExpertModeProps) {
+export default function ExpertMode({
+  site,
+  onSiteChange,
+  day,
+  onDayChange,
+  t,
+  horizonFor,
+}: ExpertModeProps) {
   const [days, setDays] = useState(30)
   const [stepMin, setStepMin] = useState(15)
   const [hover, setHover] = useState<SkySample | null>(null)
@@ -53,6 +62,14 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
   const [view, setView] = useState<'single' | 'rank' | 'find'>('single')
   const [sortBy, setSortBy] = useState<RankSortKey>('jointPct')
 
+  // Only decorate the shortlist when the ranking or the calendar is open: each
+  // profile marches a few hundred thousand grid samples, and the single-site
+  // view already carries its own.
+  const shortlist = useMemo(
+    () => (view === 'single' ? RANK_SITES : RANK_SITES.map(horizonFor)),
+    [view, horizonFor],
+  )
+
   const parsedStart = Date.parse(`${day}T00:00:00Z`)
   const t0 = Number.isFinite(parsedStart) ? parsedStart : Date.parse('2028-01-01T00:00:00Z')
   const t1 = t0 + days * DAY
@@ -60,7 +77,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
   const timeline = useMemo(
     () => buildTimeline(site, t0, t1, stepMin * 60_000),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [site.id, site.lat, site.lon, t0, t1, stepMin],
+    [site.id, site.lat, site.lon, site.horizon, site.mastHeightM, t0, t1, stepMin],
   )
   const { metrics, samples, sunWindows, commWindows } = timeline
 
@@ -71,7 +88,10 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
   useEffect(() => {
     if (view !== 'rank') return
     const mastM = site.mastHeightM ?? 0
-    const key = `${t0}:${t1}:${mastM}`
+    // The skyline is rebuilt when the mast settles, so the cache has to follow
+    // the profile's eye height and not only the live slider value.
+    const skylineMast = shortlist[0]?.horizon?.eyeHeightM
+    const key = `${t0}:${t1}:${mastM}:${skylineMast ?? 'flat'}`
     const cached = RANK_CACHE.get(key)
     if (cached) {
       setRankedBase(cached)
@@ -88,7 +108,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
       timer = setTimeout(() => {
         if (cancelled) return
         const rows = rankSites(
-          RANK_SITES.map((s) => ({ ...s, mastHeightM: mastM })),
+          shortlist.map((s) => ({ ...s, mastHeightM: mastM })),
           t0,
           t1,
           { sortBy: 'jointPct' },
@@ -103,7 +123,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
       cancelAnimationFrame(frame)
       if (timer) clearTimeout(timer)
     }
-  }, [view, t0, t1, site.mastHeightM])
+  }, [view, t0, t1, site.mastHeightM, shortlist])
 
   // Re-sorting the already computed metrics is instant; no need to re-score.
   const ranked = useMemo(
@@ -120,6 +140,8 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
   // Sky view follows the hovered sample, then the pinned one, then the shared instant.
   const skyTime = hover?.t ?? pinned?.t ?? t
   const sky = useMemo(() => createObserver(site).skyAt(skyTime), [site, skyTime])
+  // Flat-model dip at the mast top: the fallback skyline when no terrain is attached.
+  const flatDip = sky.horizonDipDeg ?? 0
 
   // Ranking view has no single-site range analysis, so only score when needed.
   const bestPanel = useMemo(
@@ -132,7 +154,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
     ? `Tilt ${(90 - Math.max(0, sky.sun.elevation)).toFixed(1)}° from horizontal · heading ${
         Math.round(sky.sun.azimuth) % 360
       }° ${compassPoint(sky.sun.azimuth)} · turn ${Math.abs(pointing.turnRateDegPerHour).toFixed(2)}°/h`
-    : 'Sun below horizon'
+    : 'Sun below the skyline'
 
   const applyCustom = () => {
     const lat = Number(customLat)
@@ -338,8 +360,11 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
             )}
 
             <p className="panel-note">
-              Flat-horizon model; the Sun counts from its upper limb. The mast lowers the horizon
-              by acos(R/(R+h)).
+              {site.horizon
+                ? `The Sun counts while its upper limb is above the terrain skyline (up to ${site.horizon.maxElevationDeg.toFixed(
+                    1,
+                  )}° here), not the tangent plane. The mast lifts the eye, which lowers that skyline.`
+                : 'Flat-horizon model while the elevation grid loads: the Sun counts from its upper limb, and the mast lowers the horizon by acos(R/(R+h)).'}
             </p>
           </section>
 
@@ -354,9 +379,13 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
                 {site.note && <p className="site-note">{site.note}</p>}
                 {isTerrainCritical(site) && (
                   <p className="terrain-warning">
-                    |lat| ≥ 80°: flat-horizon estimate. Local relief dominates here (crests can
-                    exceed 80% illumination, crater floors are permanently dark). Treat these
-                    numbers as a first guess until LOLA horizon masks are applied.
+                    {site.horizon
+                      ? `|lat| ≥ 80°: terrain decides illumination here. The LOLA skyline rises to ${site.horizon.maxElevationDeg.toFixed(
+                          1,
+                        )}° towards ${compassPoint16(site.horizon.maxAzimuthDeg)} (${site.horizon.maxDistanceKm.toFixed(
+                          0,
+                        )} km away); the 0.25° grid (~7.6 km) cannot resolve a lander-scale ridge.`
+                      : '|lat| ≥ 80°: flat-horizon estimate while the elevation grid loads. Local relief dominates here (crests can exceed 80% illumination, crater floors are permanently dark).'}
                   </p>
                 )}
               </div>
@@ -364,12 +393,16 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
                 <div>
                   <span className="readout-label">Sun</span>
                   <strong className="sun-text">{deg(focus.sun.elevation)}</strong>
-                  <span className="readout-sub">az {focus.sun.azimuth.toFixed(0)}°</span>
+                  <span className="readout-sub">
+                    az {focus.sun.azimuth.toFixed(0)}° · sky {deg(focus.sun.horizonDeg ?? -flatDip)}
+                  </span>
                 </div>
                 <div>
                   <span className="readout-label">Earth</span>
                   <strong className="earth-text">{deg(focus.earth.elevation)}</strong>
-                  <span className="readout-sub">az {focus.earth.azimuth.toFixed(0)}°</span>
+                  <span className="readout-sub">
+                    az {focus.earth.azimuth.toFixed(0)}° · sky {deg(focus.earth.horizonDeg ?? -flatDip)}
+                  </span>
                 </div>
                 <div>
                   <span className="readout-label">Link</span>
@@ -464,10 +497,9 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
         </section>
       ) : (
         <OpportunityPanel
-          sites={RANK_SITES}
+          sites={shortlist}
           t0={t0}
           days={days}
-          mastHeightM={site.mastHeightM ?? 0}
           onOpen={(next, start) => {
             onSiteChange(next)
             onDayChange(utcDay(start))
@@ -482,8 +514,10 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
           series), lunar body-fixed frame from IAU WGCCRE 2015 including physical libration.
           Validated against JPL Horizons to &lt;0.02° in elevation. Sunlight counts from the upper
           limb of the solar disc; power is the visible-disc fraction × incidence × (1 AU/r)², for a
-          vertical Sun-tracking array (polar-lander practice) and a flat panel. Flat local horizon:
-          terrain masking and LOLA topography are the next step.
+          vertical Sun-tracking array (polar-lander practice) and a flat panel. Horizon: LOLA
+          ldem_4 elevation grid (0.25° cells), marched out to 400 km with exact lunar curvature;
+          the skyline is sampled in 3° azimuth bins and the mast raises the eye. Falls back to the
+          flat tangent plane if the grid cannot load.
         </div>
       </footer>
     </>
