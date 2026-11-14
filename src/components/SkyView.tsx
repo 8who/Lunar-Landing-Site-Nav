@@ -2,6 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { createLunarTerrain } from './lunarTerrain'
 import { createObserver } from '../lib/astro/observer'
+import {
+  DSN_MIN_ELEVATION_DEG,
+  DSN_STATIONS,
+  dsnStatus,
+  earthAxesInSky,
+  earthFixedUnit,
+  type DsnLinkState,
+  type DsnStatus,
+  type EarthAxes,
+} from '../lib/astro/earthView'
 import { panelNormalSky, tiltArcPoints } from '../lib/astro/panel'
 import { isTerrainCritical } from '../lib/astro/sites'
 import type { LunarSite, SkySample } from '../lib/astro/types'
@@ -26,6 +36,99 @@ const STAR_RADIUS = 320
 /** Real angular sizes are unreadable at 70° FOV; the caption says so. */
 const SIZE_BOOST = 3
 const MIN_SIZE_DEG = 0.5
+
+/** Field of view: wide sky view, and the zoomed-in Earth close-up. */
+const FOV_WIDE = 70
+/** DSN labels only make sense once Earth is big enough to read them. */
+const LABEL_FOV = 30
+
+const LINK_COLOR: Record<DsnLinkState, number> = {
+  link: 0x6ee7b0,
+  low: 0xffb547,
+  'site-blind': 0xffb547,
+  'moon-down': 0x8b97b3,
+}
+
+const LINK_TEXT: Record<DsnLinkState, string> = {
+  link: 'link',
+  low: `Moon below ${DSN_MIN_ELEVATION_DEG}°`,
+  'site-blind': 'Earth hidden from site',
+  'moon-down': 'Moon not in view',
+}
+
+/**
+ * Day/night Earth: Blue Marble by day, city lights by night, with a soft
+ * terminator. Textures are used as stored (sRGB in, sRGB out), so no colour
+ * space conversion happens in the shader.
+ */
+function makeEarthMaterial(): THREE.ShaderMaterial {
+  const loader = new THREE.TextureLoader()
+  const day = loader.load(`${import.meta.env.BASE_URL}earth-day.jpg`)
+  const night = loader.load(`${import.meta.env.BASE_URL}earth-night.jpg`)
+  for (const tex of [day, night]) tex.anisotropy = 4
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      dayMap: { value: day },
+      nightMap: { value: night },
+      sunDir: { value: new THREE.Vector3(1, 0, 0) },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      varying vec3 vNormalW;
+      void main() {
+        vUv = uv;
+        vNormalW = normalize(mat3(modelMatrix) * normal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D dayMap;
+      uniform sampler2D nightMap;
+      uniform vec3 sunDir;
+      varying vec2 vUv;
+      varying vec3 vNormalW;
+      void main() {
+        float d = dot(normalize(vNormalW), normalize(sunDir));
+        vec3 dayCol = texture2D(dayMap, vUv).rgb * (0.35 + 0.75 * clamp(d, 0.0, 1.0));
+        vec3 nightCol = texture2D(nightMap, vUv).rgb * 1.1 + vec3(0.01, 0.015, 0.03);
+        float k = smoothstep(-0.08, 0.12, d);
+        gl_FragColor = vec4(mix(nightCol, dayCol, k), 1.0);
+      }
+    `,
+  })
+}
+
+/** Text label for a DSN complex, drawn on a canvas sprite. */
+function makeLabel(text: string): THREE.Sprite {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 64
+  const ctx = canvas.getContext('2d')!
+  ctx.font = '600 30px system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.lineWidth = 6
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)'
+  ctx.strokeText(text, 128, 32)
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText(text, 128, 32)
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  const sprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: texture,
+      transparent: true,
+      depthWrite: false,
+    }),
+  )
+  sprite.scale.set(0.8, 0.2, 1)
+  return sprite
+}
+
+/** Earth-fixed vector -> local coordinates of a three.js SphereGeometry (u = 0 at 180° W). */
+function earthLocal(v: { x: number; y: number; z: number }, r: number): THREE.Vector3 {
+  return new THREE.Vector3(v.x, v.z, -v.y).multiplyScalar(r)
+}
 
 const PITCH_MIN_DEG = -89
 const PITCH_MAX_DEG = 89
@@ -114,12 +217,15 @@ export default function SkyView({ site, t, panel }: Props) {
   const [seeThrough, setSeeThrough] = useState(false)
   const [fov, setFov] = useState(70)
   const hostRef = useRef<HTMLDivElement>(null)
-  const updateRef = useRef<(sample: SkySample, siteId: string) => void>(() => {})
+  const updateRef = useRef<
+    (sample: SkySample, siteId: string, axes: EarthAxes, dsn: DsnStatus[]) => void
+  >(() => {})
   const updatePanelRef = useRef<(panel: Props['panel']) => void>(() => {})
   // The scene effect runs once, so it reads the latest prop through this ref.
   const latestPanelRef = useRef<Props['panel']>(panel ?? null)
   latestPanelRef.current = panel ?? null
   const [sky, setSky] = useState<SkySample | null>(null)
+  const [dsn, setDsn] = useState<DsnStatus[]>([])
 
   useEffect(() => {
     const host = hostRef.current
@@ -221,28 +327,44 @@ export default function SkyView({ site, t, panel }: Props) {
     sunGroup.add(sun, sunGlow)
     scene.add(sunGroup)
 
-    const earth = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({ color: 0x2f6fca }))
-    const clouds = new THREE.Mesh(
-      sphereGeometry,
-      new THREE.MeshBasicMaterial({
-        color: 0xeaf4ff,
-        transparent: true,
-        opacity: 0.22,
-        depthWrite: false,
-      }),
-    )
+    // Real Earth: textured globe, oriented from the ephemeris every update.
+    const earthMaterial = makeEarthMaterial()
+    const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 96, 64), earthMaterial)
     const earthGlow = new THREE.Sprite(
       new THREE.SpriteMaterial({
         map: glowTexture,
         color: 0x9ad4ff,
         transparent: true,
-        opacity: 0.5,
+        opacity: 0.35,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
       }),
     )
+
+    // DSN complexes: a dot on the surface (hidden by the globe on the far side)
+    // and a label that only shows once the view is zoomed in.
+    const stationDots = new Map<string, THREE.Mesh>()
+    const stationLabels: THREE.Sprite[] = []
+    for (const station of DSN_STATIONS) {
+      const local = earthLocal(earthFixedUnit(station.lat, station.lon), 1.005)
+      const dot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.035, 16, 12),
+        new THREE.MeshBasicMaterial({ color: LINK_COLOR['moon-down'] }),
+      )
+      dot.position.copy(local)
+      const label = makeLabel(station.name)
+      label.position
+        .copy(earthLocal(earthFixedUnit(station.lat, station.lon), 1.0))
+        .add(new THREE.Vector3(0, 0.14, 0))
+      label.visible = false
+      earth.add(dot, label)
+      stationDots.set(station.id, dot)
+      stationLabels.push(label)
+    }
+    // Labels sit on the near side only: hide those on the far hemisphere.
+    const labelNormals = DSN_STATIONS.map((st) => earthLocal(earthFixedUnit(st.lat, st.lon), 1))
     const earthGroup = new THREE.Group()
-    earthGroup.add(earth, clouds, earthGlow)
+    earthGroup.add(earth, earthGlow)
     scene.add(earthGroup)
 
     // Best fixed-panel marker: cyan ring at the normal, an arc from the zenith
@@ -262,7 +384,11 @@ export default function SkyView({ site, t, panel }: Props) {
 
     const panelArc = new THREE.Line(
       new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ color: 0x4fd6e8, transparent: true, opacity: 0.6 }),
+      new THREE.LineBasicMaterial({
+        color: 0x4fd6e8,
+        transparent: true,
+        opacity: 0.6,
+      }),
     )
     panelGroup.add(panelArc)
 
@@ -338,11 +464,23 @@ export default function SkyView({ site, t, panel }: Props) {
       if (!dirty) return
       dirty = false
       camera.rotation.set(pitch.current, yaw.current, 0)
+      // Station labels: only when zoomed in, and only on the hemisphere facing us.
+      const showLabels = camera.fov < LABEL_FOV
+      const toCamera = earthGroup.position.clone().negate().normalize()
+      for (let i = 0; i < stationLabels.length; i++) {
+        const n = labelNormals[i].clone().applyQuaternion(earth.quaternion)
+        stationLabels[i].visible = showLabels && n.dot(toCamera) > 0.05
+      }
       renderer.render(scene, camera)
     }
     raf = requestAnimationFrame(draw)
 
-    updateRef.current = (sample, siteId) => {
+    const aimAt = (azimuth: number, elevation: number) => {
+      yaw.current = -azimuth * RAD
+      pitch.current = clamp(elevation, PITCH_MIN_DEG, PITCH_MAX_DEG) * RAD
+    }
+
+    updateRef.current = (sample, siteId, axes, stations) => {
       latestSample = sample
       const sunRadius = bodyRadius(sample.sun.angularDiameterDeg)
       const earthRadius = bodyRadius(sample.earth.angularDiameterDeg)
@@ -352,9 +490,27 @@ export default function SkyView({ site, t, panel }: Props) {
       sunGroup.position.copy(skyVector(sample.sun.azimuth, sample.sun.elevation, SKY_RADIUS))
 
       earth.scale.setScalar(earthRadius)
-      clouds.scale.setScalar(earthRadius * 1.015)
-      earthGlow.scale.setScalar(earthRadius * 2.2)
+      earthGlow.scale.setScalar(earthRadius * 2.6)
       earthGroup.position.copy(skyVector(sample.earth.azimuth, sample.earth.elevation, SKY_RADIUS))
+
+      // Orientation: Earth-fixed axes in the site's sky (ENU) -> scene axes.
+      // ENU (e, n, u) maps to scene (e, u, -n); the sphere's local x/y/z are
+      // Earth-fixed x / z / -y (texture u = 0 at 180 deg W).
+      const toScene = (a: { e: number; n: number; u: number }) => new THREE.Vector3(a.e, a.u, -a.n)
+      const basis = new THREE.Matrix4().makeBasis(
+        toScene(axes.x),
+        toScene(axes.z),
+        toScene(axes.y).negate(),
+      )
+      earth.quaternion.setFromRotationMatrix(basis)
+      // The Sun is so far away that its direction from Earth equals the one from the site.
+      earthMaterial.uniforms.sunDir.value.copy(
+        skyVector(sample.sun.azimuth, sample.sun.elevation, 1).normalize(),
+      )
+      for (const st of stations) {
+        const dot = stationDots.get(st.station.id)
+        if (dot) (dot.material as THREE.MeshBasicMaterial).color.setHex(LINK_COLOR[st.state])
+      }
 
       // No atmosphere and no scattering: the ground is lit by the Sun only.
       sunLight.intensity = 0.15 + 1.15 * Math.max(0, Math.sin(sample.sun.elevation * RAD))
@@ -367,9 +523,13 @@ export default function SkyView({ site, t, panel }: Props) {
       if (aimedFor !== siteId) {
         aimedFor = siteId
         const target = sample.earth.elevation > 0 ? sample.earth : sample.sun
-        yaw.current = -target.azimuth * RAD
-        pitch.current = clamp(target.elevation, PITCH_MIN_DEG, PITCH_MAX_DEG) * RAD
+        aimAt(target.azimuth, target.elevation)
       }
+      dirty = true
+    }
+
+    // Textures arrive asynchronously; redraw once they do.
+    THREE.DefaultLoadingManager.onLoad = () => {
       dirty = true
     }
 
@@ -433,9 +593,11 @@ export default function SkyView({ site, t, panel }: Props) {
     }
     const onPointerMove = (event: PointerEvent) => {
       if (!dragging) return
-      yaw.current -= (event.clientX - lastX) * DRAG_RAD_PER_PX
+      // Drag speed follows the zoom, so a close-up does not fly off the screen.
+      const k = DRAG_RAD_PER_PX * (camera.fov / FOV_WIDE)
+      yaw.current -= (event.clientX - lastX) * k
       pitch.current = clamp(
-        pitch.current - (event.clientY - lastY) * DRAG_RAD_PER_PX,
+        pitch.current - (event.clientY - lastY) * k,
         PITCH_MIN_DEG * RAD,
         PITCH_MAX_DEG * RAD,
       )
@@ -470,14 +632,25 @@ export default function SkyView({ site, t, panel }: Props) {
       host.removeEventListener('pointermove', onPointerMove)
       host.removeEventListener('pointerup', onPointerUp)
       host.removeEventListener('pointercancel', onPointerUp)
+      host.removeEventListener('wheel', onWheel)
+      THREE.DefaultLoadingManager.onLoad = () => {}
       updateRef.current = () => {}
       updatePanelRef.current = () => {}
       scene.traverse((object) => {
         // Sprite geometries are shared by every Sprite in the module: never dispose them.
         if (!(object as THREE.Sprite).isSprite) (object as THREE.Mesh).geometry?.dispose()
         const material = (object as THREE.Mesh).material
-        if (Array.isArray(material)) material.forEach((entry) => entry.dispose())
-        else material?.dispose()
+        const disposeMaterial = (m: THREE.Material) => {
+          const maps = m as THREE.Material & { map?: THREE.Texture | null }
+          maps.map?.dispose()
+          const uniforms = (m as THREE.ShaderMaterial).uniforms
+          if (uniforms)
+            for (const u of Object.values(uniforms))
+              (u.value as THREE.Texture)?.isTexture && (u.value as THREE.Texture).dispose()
+          m.dispose()
+        }
+        if (Array.isArray(material)) material.forEach(disposeMaterial)
+        else if (material) disposeMaterial(material)
       })
       glowTexture.dispose()
       renderer.dispose()
@@ -487,8 +660,10 @@ export default function SkyView({ site, t, panel }: Props) {
 
   useEffect(() => {
     const sample = createObserver(site).skyAt(t)
-    updateRef.current(sample, site.id)
+    const stations = dsnStatus(t, sample.earthVisible)
+    updateRef.current(sample, site.id, earthAxesInSky(site, t), stations)
     setSky(sample)
+    setDsn(stations)
   }, [site, t])
 
   useEffect(() => {
@@ -496,28 +671,29 @@ export default function SkyView({ site, t, panel }: Props) {
   }, [panel])
 
   return (
-    <div className="sky-view">
-      <div className="sky-canvas" ref={hostRef} />
-      {sky && (
-        <div className="sky-overlay">
-          <p className={sky.sunlit ? 'sun-text' : 'bad-text'}>
-            Sun: {sky.sunlit ? 'visible' : 'below horizon'} (elev {deg(sky.sun.elevation)})
-          </p>
-          <p className={sky.earthVisible ? 'earth-text' : 'bad-text'}>
-            Earth: {sky.earthVisible ? 'visible' : 'below horizon'} (elev{' '}
-            {deg(sky.earth.elevation)})
-          </p>
-          {panel && (
-            <p className="panel-text">
-              {panel.tiltDeg === 0
-                ? 'Best fixed panel: flat (points at zenith)'
-                : `Best fixed panel: tilt ${panel.tiltDeg}° · heading ${panel.azimuthDeg}°${
-                    isTerrainCritical(site) ? ' (heading not meaningful at polar sites)' : ''
-                  }`}
+    <>
+      <div className="sky-view">
+        <div className="sky-canvas" ref={hostRef} />
+        {sky && (
+          <div className="sky-overlay">
+            <p className={sky.sunlit ? 'sun-text' : 'bad-text'}>
+              Sun: {sky.sunlit ? 'visible' : 'below horizon'} (elev {deg(sky.sun.elevation)})
             </p>
-          )}
-        </div>
-      )}
+            <p className={sky.earthVisible ? 'earth-text' : 'bad-text'}>
+              Earth: {sky.earthVisible ? 'visible' : 'below horizon'} (elev{' '}
+              {deg(sky.earth.elevation)})
+            </p>
+            {panel && (
+              <p className="panel-text">
+                {panel.tiltDeg === 0
+                  ? 'Best fixed panel: flat (points at zenith)'
+                  : `Best fixed panel: tilt ${panel.tiltDeg}° · heading ${panel.azimuthDeg}°${
+                      isTerrainCritical(site) ? ' (heading not meaningful at polar sites)' : ''
+                    }`}
+              </p>
+            )}
+          </div>
+        )}
       <div className="sky-controls" aria-label="Sky camera controls">
         <button onClick={() => controlsRef.current('sun')} title="Look toward the Sun, including when below the horizon">Focus Sun</button>
         <button onClick={() => controlsRef.current('earth')} title="Look toward Earth, including when below the horizon">Focus Earth</button>
@@ -535,6 +711,19 @@ export default function SkyView({ site, t, panel }: Props) {
 
         Angular sizes exaggerated ×{SIZE_BOOST} (minimum {MIN_SIZE_DEG}°), not to scale
       </p>
-    </div>
+      </div>
+      {dsn.length > 0 && (
+        <div className="dsn-list">
+          <span className="dsn-title">Deep Space Network · who can talk to this site now</span>
+          {dsn.map((st) => (
+            <p key={st.station.id} className={`dsn-row dsn-${st.state}`}>
+              <i aria-hidden="true" />
+              <strong>{st.station.name}</strong>&nbsp;{st.station.antenna} · Moon{' '}
+              {deg(st.moonElevation)} · {LINK_TEXT[st.state]}
+            </p>
+          ))}
+        </div>
+      )}
+    </>
   )
 }

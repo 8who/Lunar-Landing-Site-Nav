@@ -14,7 +14,7 @@
 
 import { Body, GeoVector, MakeTime } from 'astronomy-engine'
 import { bodyBasis, moonOrientation, toBody, toSelenographic } from './lunarFrame'
-import { DEG, RAD, cross, dot, normalize, sub, vec, type Vec3 } from './vec'
+import { DEG, RAD, cross, dot, normalize, scale, sub, vec, type Vec3 } from './vec'
 import type { LunarSite, SkyDirection, SkySample } from './types'
 
 export const KM_PER_AU = 149_597_870.7
@@ -86,6 +86,17 @@ export function discFractionAbove(elevationDeg: number, radiusDeg: number): numb
   return (Math.acos(-h) + h * Math.sqrt(1 - h * h)) / Math.PI
 }
 
+/**
+ * Geometric horizon dip for an eye `heightM` above a sphere of radius
+ * `groundRadiusKm`: acos(R / (R + h)), in degrees. No atmosphere on the Moon,
+ * so no refraction correction.
+ */
+export function horizonDipDeg(heightM: number, groundRadiusKm = MOON_RADIUS_KM): number {
+  if (!(heightM > 0)) return 0
+  const R = groundRadiusKm
+  return Math.acos(R / (R + heightM / 1000)) * DEG
+}
+
 /** Mean solar constant at 1 AU, W/m^2 (TSI). */
 export const SOLAR_CONSTANT_WM2 = 1361
 
@@ -95,15 +106,23 @@ export interface SiteObserver {
   skyAt(date: Date | number): SkySample
   /** Sun centre elevation only (cheap path for window searches) */
   sunElevation(date: Date | number): number
-  /** Any part of the solar disc above the flat horizon */
+  /** Any part of the solar disc above the horizon seen from the mast top */
   sunVisible(date: Date | number): boolean
+  /** Earth's centre above the horizon seen from the mast top (antenna line of sight) */
+  earthVisible(date: Date | number): boolean
+  /** Horizon dip at the mast top, deg */
+  horizonDipDeg: number
   /** Earth elevation only (cheap path for window searches) */
   earthElevation(date: Date | number): number
 }
 
 export function createObserver(site: LunarSite): SiteObserver {
   const frame = localFrame(site)
-  const rSite = siteVector(site)
+  const groundRadiusKm = MOON_RADIUS_KM + (site.elevationM ?? 0) / 1000
+  const mastM = Math.max(0, site.mastHeightM ?? 0)
+  const dip = horizonDipDeg(mastM, groundRadiusKm)
+  // Observer sits at the top of the mast.
+  const rSite = scale(frame.up, groundRadiusKm + mastM / 1000)
 
   const relativeVectors = (date: Date | number) => {
     const t = MakeTime(date instanceof Date ? date : new Date(date))
@@ -133,8 +152,10 @@ export function createObserver(site: LunarSite): SiteObserver {
     const { sunRel } = relativeVectors(date)
     const d = Math.sqrt(dot(sunRel, sunRel))
     const elev = Math.asin(Math.max(-1, Math.min(1, dot(normalize(sunRel), frame.up)))) * DEG
-    return elev > -Math.atan(SUN_RADIUS_KM / d) * DEG
+    return elev > -dip - Math.atan(SUN_RADIUS_KM / d) * DEG
   }
+
+  const earthVisible = (date: Date | number) => earthElevation(date) > -dip
 
   const earthElevation = (date: Date | number) => {
     const { earthRel } = relativeVectors(date)
@@ -145,6 +166,8 @@ export function createObserver(site: LunarSite): SiteObserver {
     site,
     sunElevation,
     sunVisible,
+    earthVisible,
+    horizonDipDeg: dip,
     earthElevation,
     skyAt(date) {
       const { sunRel, earthRel } = relativeVectors(date)
@@ -154,9 +177,10 @@ export function createObserver(site: LunarSite): SiteObserver {
         t: (date instanceof Date ? date : new Date(date)).getTime(),
         sun,
         earth,
+        horizonDipDeg: dip,
         // Upper limb above the horizon: a partly risen Sun still lights the site.
-        sunlit: sun.elevation > -sun.angularDiameterDeg / 2,
-        earthVisible: earth.elevation > 0,
+        sunlit: sun.elevation > -dip - sun.angularDiameterDeg / 2,
+        earthVisible: earth.elevation > -dip,
       }
     },
   }
