@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import MissionPlanner from '../components/MissionPlanner'
 import MoonGlobe from '../components/MoonGlobe'
 import SiteAlternatives from '../components/SiteAlternatives'
 import type { AlternativeSearch } from '../lib/siteAlternatives'
@@ -340,13 +339,6 @@ export default function ExplorerMode({
           <SkyView site={site} t={t} />
         </section>
       </aside>
-
-      <MissionPlanner site={site} windows={cycle.jointWindows} now={t} end={windowEnd}
-        onJump={(next, hours) => {
-          onAlternativeSearchChange({ kind: 'continuous', t0: next, t1: next + hours * 3_600_000, hours })
-          setPlaying(false)
-          commitInstant(next, onDayChange, onMinutesChange)
-        }} />
 
       <section className="controls explorer-controls">
         <div className="field">
