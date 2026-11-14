@@ -17,10 +17,10 @@ interface Props {
 
 const COLUMNS: { key: RankSortKey | null; label: string }[] = [
   { key: 'sunlitPct', label: 'Sunlight %' },
-  { key: 'commPct', label: 'Earth link %' },
+  { key: 'commPct', label: 'Earth geometric visibility %' },
   { key: 'jointPct', label: 'Both %' },
-  { key: 'meanTrackingIncidence', label: 'Solar power' },
-  { key: 'longestCommMs', label: 'Longest Earth link' },
+  { key: 'meanTrackingIncidence', label: 'Estimated solar flux' },
+  { key: 'longestCommMs', label: 'Longest Earth visibility' },
   { key: null, label: 'Longest sunlight' },
 ]
 
@@ -78,9 +78,9 @@ export default function RankingTable({ rows, sortBy, onSort, onSelect, resourceB
               </td>
               {resourceById && <td className="mono" title={resourceById.get(row.site.id)?.reasons.join('; ') || 'Combined mineral and simultaneous visibility planning score'}>{resourceLoading ? 'Loading…' : resourceById.get(row.site.id)?.score == null ? '—' : `${resourceById.get(row.site.id)!.score!.toFixed(1)} / 100`}</td>}
               <td className="mono sun-text">{formatPercent(row.metrics.sunlitPct)}</td>
-              <td className="mono earth-text">{formatPercent(row.metrics.commPct)}</td>
+              <td className="mono earth-text" title="Earth’s disc clears the modeled local terrain skyline; DSN station availability and the communications link budget are not included.">{formatPercent(row.metrics.commPct)}</td>
               <td className="mono">{formatPercent(row.metrics.jointPct)}</td>
-              <td className="mono sun-text" title="Average for a vertical array that turns to face the Sun">
+              <td className="mono sun-text" title="Idealized incident solar flux per square metre. Panel area, conversion, storage, loads and thermal limits are not modeled.">
                 {Math.round(row.metrics.meanTrackingFluxWm2)} W/m²
               </td>
               <td className="mono">{formatDuration(row.metrics.longestCommMs)}</td>

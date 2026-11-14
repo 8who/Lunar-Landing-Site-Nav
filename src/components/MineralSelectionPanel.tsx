@@ -14,6 +14,22 @@ export default function MineralSelectionPanel({ rows, loading, onSelect, mineral
   const scored = useMemo(() => scoreResources(sampled, prefs), [sampled, prefs])
   const best = scored.find((row) => row.eligible)
   const selected = scored.find((row) => row.site.id === selectedId) ?? best ?? scored[0]
+  // Plot original bin bounds in angular coordinates, including the full polar cap.
+  // Normalize the site longitude using the same convention as source sampling.
+  const footprint = selected?.sample ? (() => {
+    const bin = selected.sample.selected
+    const lon = ((selected.site.lon + 180) % 360 + 360) % 360 - 180
+    const lat = selected.site.lat
+    const lonPadding = Math.max(.25, (Math.max(bin.east, lon) - Math.min(bin.west, lon)) * .1)
+    const latPadding = Math.max(.25, (Math.max(bin.north, lat) - Math.min(bin.south, lat)) * .1)
+    const west = Math.max(-180, Math.min(bin.west, lon) - lonPadding)
+    const east = Math.min(180, Math.max(bin.east, lon) + lonPadding)
+    const south = Math.max(-90, Math.min(bin.south, lat) - latPadding)
+    const north = Math.min(90, Math.max(bin.north, lat) + latPadding)
+    const x = (value: number) => 80 + (value - west) / (east - west) * 480
+    const y = (value: number) => 200 - (value - south) / (north - south) * 160
+    return { bin, lon, lat, west, east, south, north, x, y }
+  })() : null
   const changeNumber = (key: keyof ResourcePreferences, value: string) => {
     const number = Number(value)
     if (!Number.isFinite(number)) return
@@ -40,6 +56,7 @@ export default function MineralSelectionPanel({ rows, loading, onSelect, mineral
         {([['minSun', 'Sunlight'], ['minEarth', 'Earth visibility'], ['minJoint', 'Simultaneous Sun + Earth']] as const).map(([key, label]) => <label className="field" key={key}><span>{label} (%)</span><input type="number" min={0} max={100} step={5} value={prefs[key]} onChange={(e) => changeNumber(key, e.target.value)} /></label>)}
       </fieldset>
       <p className="mineral-method">Planning score = {100 - prefs.mineralWeight}% × simultaneous visibility + {prefs.mineralWeight}% × resource score. Resource score = abundance ÷ target, capped at 100. Targets and weights are your planning assumptions, not NASA recommendations. Sites must meet every minimum, have a terrain skyline, and have some simultaneous visibility.</p>
+      <p className="mineral-caveat">Tradeoff: a higher score can exchange simultaneous Sun + Earth geometry for higher regional abundance. Compare the underlying percentages and abundance; the score does not establish a better landing site. Operations describe the landing site at 1 h cadence, while abundance describes a whole source bin. The planning score includes no station scheduling, link budget or electrical power model.</p>
       {radius > 0 && <p className="terrain-warning">Regional search includes the site’s own bin plus bin centres within {radius} km. A nearby maximum is off-site context: no rover route, accessible deposit, local illumination, or communications at that bin is inferred.</p>}
       <div aria-live="polite" role="status" className="mineral-status">
         {error ? <p>Mineral data could not load. Operational ranking remains available. <button onClick={onRetry}>Retry mineral data</button></p>
@@ -62,6 +79,24 @@ export default function MineralSelectionPanel({ rows, loading, onSelect, mineral
             return <div key={key}><dt>{MINERAL_PRODUCTS[key].label} at site</dt><dd>{cell ? `${formatDecimal(cell.value, 3)} ${MINERAL_PRODUCTS[key].unit}` : 'No coverage'}</dd></div>
           })}</dl>
           {selected.sample && <p className="mineral-bin">Selected {product.label} source bin: {formatCoord(selected.sample.selected.south, selected.sample.selected.west)} to {formatCoord(selected.sample.selected.north, selected.sample.selected.east)}. {product.resolution}. Grid spacing is not the instrument’s resolving power; adjacent sites may share one regional measurement.</p>}
+          {footprint && <figure style={{ gridColumn: '1 / -1', margin: '12px 0', minWidth: 0 }}>
+            <svg viewBox="0 0 640 280" role="img" aria-labelledby="mineral-footprint-title mineral-footprint-description" style={{ display: 'block', width: '100%', maxWidth: 640, color: 'var(--text)', fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+              <title id="mineral-footprint-title">Selected source-bin footprint and landing site</title>
+              <desc id="mineral-footprint-description">Rectangle: original {product.label} source bin, longitude {formatDecimal(footprint.bin.west, 6)} to {formatDecimal(footprint.bin.east, 6)} degrees east, latitude {formatDecimal(footprint.bin.south, 6)} to {formatDecimal(footprint.bin.north, 6)} degrees north. Cross: {selected.site.name} at longitude {formatDecimal(footprint.lon, 6)}, latitude {formatDecimal(footprint.lat, 6)}. Longitude increases rightward; latitude increases upward. Angular coordinates, not a distance map.</desc>
+              <path d="M80 30V200H570" fill="none" stroke="currentColor" />
+              <rect x={footprint.x(footprint.bin.west)} y={footprint.y(footprint.bin.north)} width={footprint.x(footprint.bin.east) - footprint.x(footprint.bin.west)} height={footprint.y(footprint.bin.south) - footprint.y(footprint.bin.north)} fill="var(--earth)" fillOpacity={.15} stroke="var(--earth)" strokeWidth={2} />
+              <path d={`M${footprint.x(footprint.lon) - 6} ${footprint.y(footprint.lat)}h12M${footprint.x(footprint.lon)} ${footprint.y(footprint.lat) - 6}v12`} stroke="currentColor" strokeWidth={2} />
+              <g fill="currentColor">
+                <text x={80} y={222} textAnchor="middle">{formatDecimal(footprint.west, 6)}°</text>
+                <text x={560} y={222} textAnchor="middle">{formatDecimal(footprint.east, 6)}°</text>
+                <text x={70} y={204} textAnchor="end">{formatDecimal(footprint.south, 6)}°</text>
+                <text x={70} y={44} textAnchor="end">{formatDecimal(footprint.north, 6)}°</text>
+                <text x={320} y={250} textAnchor="middle">Longitude (° east-positive)</text>
+                <text transform="translate(18 120) rotate(-90)" textAnchor="middle">Latitude (° north-positive)</text>
+              </g>
+            </svg>
+            <figcaption className="mineral-bin">Rectangle: selected source bin · Cross: landing site{selected.site.approx ? ' (approximate coordinates)' : ''}. Original boundaries and one abundance per bin; no interpolation or lander-scale precision. Angular plot; distances and areas are distorted near the pole. A polar cap spans all longitudes.</figcaption>
+          </figure>}
           <p>{product.note} No per-bin uncertainty is supplied in these source tables; small concentration differences are not established statistically significant.</p>
         </section>}
       </>}

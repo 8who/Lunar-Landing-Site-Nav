@@ -309,7 +309,7 @@ export default function TimelineChart({
         <span><i className="swatch sun" /> Solar elevation</span>
         <span><i className="swatch earth" /> Earth elevation</span>
         {hasSkyline && <span><i className="swatch skyline" /> Skyline towards the Sun</span>}
-        <span><i className="swatch band" /> Direct-to-Earth windows</span>
+        <span><i className="swatch band" /> Earth above terrain skyline (geometric)</span>
         <span className="legend-hint">Hover to inspect · click to pin a moment</span>
       </div>
       {marker && (

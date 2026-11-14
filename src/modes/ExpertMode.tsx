@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import TimelineChart from '../components/TimelineChart'
 import RankingTable from '../components/RankingTable'
 import MineralSelectionPanel from '../components/MineralSelectionPanel'
+import MissionAssessmentPanel from '../components/MissionAssessmentPanel'
 import { loadMineralDataset, MINERAL_PRODUCTS, sampleMineral, scoreResources, type MineralDataset, type MineralKey, type ResourcePreferences } from '../lib/resources/minerals'
 import OpportunityPanel from '../components/OpportunityPanel'
 import SkyView from '../components/SkyView'
@@ -15,7 +16,7 @@ import { ArrayPowerBars, mastLine, useTrackingPointing } from '../components/Arr
 import { createObserver } from '../lib/astro/observer'
 import { SITES, customSite, isTerrainCritical } from '../lib/astro/sites'
 import type { LunarSite, SkySample, TimeWindow } from '../lib/astro/types'
-import { formatDuration, formatInstant, formatUtc, deg } from '../lib/format'
+import { formatDuration, formatInstant, formatUtc, formatDecimal, deg } from '../lib/format'
 import { utcDay } from '../lib/astro/scrub'
 
 
@@ -346,7 +347,7 @@ const skyTime = hover?.t ?? pinned?.t ?? playhead
         <div className="field">
           <span>{view === 'find' ? 'Search horizon' : 'Window'}</span>
           <div className="segmented">
-            {[7, 30, 90, 365].map((d) => (
+            {[...new Set([7, 30, 90, 365, days])].sort((a, b) => a - b).map((d) => (
               <button key={d} className={days === d ? 'active' : ''} onClick={() => setDays(d)}>
                 {d === 30 ? '1 lunar day' : `${d}d`}
               </button>
@@ -405,19 +406,19 @@ const skyTime = hover?.t ?? pinned?.t ?? playhead
               tone="sun"
             />
             <Kpi
-              label="Direct-to-Earth"
+              label="Earth geometric visibility"
               value={`${metrics.commPct.toFixed(0)}%`}
               sub={`longest ${formatDuration(metrics.longestCommMs)}`}
               tone="earth"
             />
             <Kpi
-              label="Sun + link"
+              label="Sun + Earth geometry"
               value={`${metrics.jointPct.toFixed(0)}%`}
               sub="both conditions at once"
               tone="joint"
             />
             <Kpi
-              label="Solar power"
+              label="Incident solar flux"
               value={`${Math.round(metrics.meanTrackingFluxWm2)} W/m²`}
               sub={`avg, vertical Sun-tracking array · flat panel ${Math.round(
                 metrics.meanSolarIncidence * 1361,
@@ -437,6 +438,17 @@ const skyTime = hover?.t ?? pinned?.t ?? playhead
               tone="muted"
             />
           </section>
+          <p className="panel-note">
+            <strong>KPI model limits.</strong>{' '}
+            {site.horizon
+              ? `Terrain: ~${formatDecimal(site.horizon.cellKm, 1)} km cells (north–south), ${formatDecimal(site.horizon.stepDeg)}° azimuth steps.`
+              : 'Terrain skyline unavailable; flat-horizon fallback.'}{' '}
+            {site.approx ? 'Site coordinates are approximate (km scale).' : 'Results depend on the supplied site coordinates.'}{' '}
+            Effective sample cadence: {formatDecimal(samples.length > 1 ? (samples[1].t - samples[0].t) / 60_000 : stepMin, 1)} min (requested {stepMin} min; long ranges are capped at about 2,400 intervals); brief events may be missed. Earth visibility is geometric only: no station scheduling or link budget.
+            These flux KPIs show incident sunlight in W/m², without electrical conversion, storage or load modeling.
+          </p>
+
+          <MissionAssessmentPanel site={site} t0={t0} t1={t1} horizonFor={horizonFor} />
 
           <section className="chart-card panel-card">
             <div className="chart-head">
@@ -475,7 +487,7 @@ const skyTime = hover?.t ?? pinned?.t ?? playhead
 
             {bestPanel && (
               <ArrayPowerBars
-                caption="Average power per m² · selected range"
+                caption="Average incident solar flux · W/m² · selected range"
                 rows={[
                   { label: 'Two-axis Sun-tracking array', value: metrics.meanTrackingFluxWm2 },
                   {
@@ -703,6 +715,7 @@ const skyTime = hover?.t ?? pinned?.t ?? playhead
             onAlternativeSearchChange({ kind: 'calendar', t0: start, t1: start + criteria.durationMs, constraints: criteria.constraints })
             onSiteChange(next)
             onDayChange(utcDay(start))
+            setDays(criteria.durationMs / DAY)
             setView('single')
           }}
         />
