@@ -87,6 +87,14 @@ mode. Ground and celestial pixels are clipped against the same skyline
 profile as the visibility calculations, including mast dip while terrain loads.
 The regional foreground remains illustrative. See-through ground deliberately
 reveals occulted bodies and is labeled as a cutaway, not physical visibility.
+Close-up regolith uses deterministic, seamless multiscale height and albedo
+detail, with small pits and worn crater rims lit by the scene's Sun. These
+imperfections are illustrative, not resolved NASA measurements; they do not
+enter horizon, visibility, ranking or resource calculations. Texture mipmaps
+and anisotropic filtering limit shimmer at grazing angles. Generated texture
+bytes are reused between sites, and mast changes move the existing mesh.
+The photo globe uses the existing LOLA grid for regional bump lighting at its
+physical height scale, separately from the LROC image and scientific overlays.
 Earth line of sight means some part of the disc clears the skyline; an actual
 DSN link additionally requires an antenna in view (shown in the station list).
 Manual zoom reaches a 0.5° field of view (about 160× magnification relative to the

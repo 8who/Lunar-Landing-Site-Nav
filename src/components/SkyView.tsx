@@ -469,7 +469,7 @@ export default function SkyView({ site, t, panel, visualMastHeightM = site.mastH
           if (material && !Array.isArray(material)) { material.opacity = groundMaterial.opacity; material.depthWrite = groundMaterial.depthWrite }
         })
         scene.add(terrain)
-        setTerrainStatus('NASA LRO / LOLA regional terrain · rocks and foreground relief illustrative')
+        setTerrainStatus('NASA LRO / LOLA regional terrain · fine regolith and small craters illustrative')
         dirty = true
       }).catch(() => { if (!terrainDisposed) setTerrainStatus('Terrain unavailable · illustrative ground fallback') })
     let latestSample: SkySample | null = null

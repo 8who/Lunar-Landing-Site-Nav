@@ -62,6 +62,18 @@ export default function SiteAlternatives({ site, horizonFor, t0, t1, search, onC
     <div className="alternatives-heading"><h3>Alternatives</h3>{search && <button onClick={onClearSearch}>Clear saved search criteria</button>}</div>
     <p className="alternatives-context">{search?.kind === 'resources' ? `Last resource search: ${MINERAL_PRODUCTS[search.mineral].label}, ${search.preferences.mineralWeight}% resource influence and all operational minimums.` : search?.kind === 'continuous' ? `Last operation: ${search.hours} h of simultaneous Sun and Earth visibility, at the same start time. Matches require 100% overlap in the model.` : search?.kind === 'calendar' ? 'Last mission-window search: same percentage thresholds, at the selected start date.' : `${search ? 'Last ranking range. ' : ''}Similar sunlight, Earth visibility and simultaneous availability: within 20 percentage points on each metric.`} {formatUtc(start)} → {formatUtc(end)}. Current mast: {formatDecimal(site.mastHeightM ?? 0, 1)} m.</p>
     <div role="status" aria-live="polite">{pending ? <p>Comparing landing sites…</p> : result.error ? <p>Comparison unavailable until terrain and required source data are loaded.</p> : result.rows.length === 0 ? <p>No other sites meet these criteria. Browse all sites or adjust your search.</p> : <p className="alternatives-count">{result.rows.length} matching {result.rows.length === 1 ? 'site' : 'sites'} · 1 h sampling · {comparisonNote}</p>}</div>
-    {!pending && <ul>{result.rows.map((row) => <li key={row.site.id}><button onClick={() => onSelect(row.site)} title={`Select ${row.site.name}`}><strong>{row.site.name}</strong><span>Sun {formatPercent(row.metrics.sunlitPct)} · Earth {formatPercent(row.metrics.commPct)} · Both {formatPercent(row.metrics.jointPct)}</span>{search?.kind === 'resources' && row.resourceValue !== undefined && <span>{formatDecimal(row.resourceValue, 3)} {MINERAL_PRODUCTS[search.mineral].unit} · score {formatDecimal(row.score!, 1)}</span>}</button></li>)}</ul>}
+    {!pending && result.rows.length > 0 && <>
+      <div className="alternatives-columns" aria-hidden="true"><span>Landing site</span><span>Sun</span><span>Earth</span><span>Both</span><span /></div>
+      <ul>{result.rows.map((row) => <li key={row.site.id}>
+        <button onClick={() => onSelect(row.site)} aria-label={`Select ${row.site.name}. Sun ${formatPercent(row.metrics.sunlitPct)}, Earth ${formatPercent(row.metrics.commPct)}, both ${formatPercent(row.metrics.jointPct)}${search?.kind === 'resources' && row.resourceValue !== undefined ? `, ${MINERAL_PRODUCTS[search.mineral].label} ${formatDecimal(row.resourceValue, 3)} ${MINERAL_PRODUCTS[search.mineral].unit}` : ''}`}>
+          <strong className="alternative-name">{row.site.name}</strong>
+          <span className="alternative-measure"><span className="alternative-measure-label">Sun</span>{formatPercent(row.metrics.sunlitPct)}</span>
+          <span className="alternative-measure"><span className="alternative-measure-label">Earth</span>{formatPercent(row.metrics.commPct)}</span>
+          <span className="alternative-measure"><span className="alternative-measure-label">Both</span>{formatPercent(row.metrics.jointPct)}</span>
+          <svg className="alternative-arrow" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M4 10h11m-4-4 4 4-4 4" /></svg>
+          {search?.kind === 'resources' && row.resourceValue !== undefined && <span className="alternative-resource">{MINERAL_PRODUCTS[search.mineral].label}: {formatDecimal(row.resourceValue, 3)} {MINERAL_PRODUCTS[search.mineral].unit} · weighted score {formatDecimal(row.score!, 1)}</span>}
+        </button>
+      </li>)}</ul>
+    </>}
   </section>
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { elevationAt } from '../lib/astro/terrain'
+import { elevationAt, isotropicGrid, TERRAIN_COLS, TERRAIN_ROWS } from '../lib/astro/terrain'
 import { lunarVector, vectorToLatLon, yawToFaceLon } from '../lib/astro/globeMath'
 import type { LunarSite } from '../lib/astro/types'
 import { markerAtPointer } from './globeMarkers'
@@ -365,6 +365,30 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
     // north up). The procedural texture paints the globe until it arrives and
     // stays as the fallback if the image cannot be loaded.
     let disposed = false
+    // Measured regional slopes modulate lighting, independently of the photo's
+    // brightness. Do not treat dark maria as depressions or displace data layers.
+    loadTerrainGrid().then(grid => {
+      if (disposed || !grid) return
+      const elevations = isotropicGrid(grid)
+      const pixels = new Uint8Array(elevations.length * 4)
+      for (let i = 0; i < elevations.length; i++) {
+        const height = Math.round(THREE.MathUtils.clamp((elevations[i] + 12) / 24, 0, 1) * 255)
+        pixels[i * 4] = pixels[i * 4 + 1] = pixels[i * 4 + 2] = height
+        pixels[i * 4 + 3] = 255
+      }
+      const relief = new THREE.DataTexture(pixels, TERRAIN_COLS, TERRAIN_ROWS)
+      relief.flipY = true
+      relief.wrapS = THREE.RepeatWrapping
+      relief.magFilter = THREE.LinearFilter
+      relief.minFilter = THREE.LinearMipmapLinearFilter
+      relief.generateMipmaps = true
+      relief.anisotropy = renderer.capabilities.getMaxAnisotropy()
+      relief.needsUpdate = true
+      material.bumpMap = relief
+      material.bumpScale = 24 / 1737.4 * RADIUS
+      material.needsUpdate = true
+      dirty = true
+    })
     new THREE.TextureLoader().load(
       `${import.meta.env.BASE_URL}moon.jpg`,
       (loaded) => {
@@ -660,6 +684,7 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
       // Dispose whichever map is bound: the real one if it loaded, else the
       // procedural fallback. A late load disposes itself via `disposed`.
       material.map?.dispose()
+      material.bumpMap?.dispose()
       material.dispose()
       renderer.dispose()
       if (renderer.domElement.parentNode === host) host.removeChild(renderer.domElement)
