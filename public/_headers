@@ -1,0 +1,24 @@
+# Cloudflare Pages headers. Not applied by `vite preview`; live only on Pages.
+# Hashed build output never changes content, so it can be cached forever.
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Terrain grid and textures are large and change only with a new build.
+/moon-elevation.f32
+  Cache-Control: public, max-age=604800
+  Content-Type: application/octet-stream
+
+/moon-terrain-4k.jpg
+/moon.jpg
+/earth-day.jpg
+/earth-night.jpg
+  Cache-Control: public, max-age=604800
+
+# Documents stay revalidated.
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
