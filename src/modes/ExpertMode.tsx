@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import TimelineChart from '../components/TimelineChart'
 import RankingTable from '../components/RankingTable'
+import MineralSelectionPanel from '../components/MineralSelectionPanel'
 import OpportunityPanel from '../components/OpportunityPanel'
 import SkyView from '../components/SkyView'
 import MoonGlobe from '../components/MoonGlobe'
@@ -59,7 +60,7 @@ export default function ExpertMode({
   const [pinned, setPinned] = useState<SkySample | null>(null)
   const [customLat, setCustomLat] = useState('-89.50')
   const [customLon, setCustomLon] = useState('0.00')
-  const [view, setView] = useState<'single' | 'rank' | 'find'>('single')
+  const [view, setView] = useState<'single' | 'rank' | 'find' | 'resources'>('single')
   const [sortBy, setSortBy] = useState<RankSortKey>('jointPct')
 
   // Only decorate the shortlist when the ranking or the calendar is open: each
@@ -86,7 +87,7 @@ export default function ExpertMode({
   const [rankLoading, setRankLoading] = useState(false)
 
   useEffect(() => {
-    if (view !== 'rank') return
+    if (view !== 'rank' && view !== 'resources') return
     const mastM = site.mastHeightM ?? 0
     // The skyline is rebuilt when the mast settles, so the cache has to follow
     // the profile's eye height and not only the live slider value.
@@ -187,6 +188,9 @@ export default function ExpertMode({
             <button className={view === 'find' ? 'active' : ''} onClick={() => setView('find')}>
               Find windows
             </button>
+            <button className={view === 'resources' ? 'active' : ''} aria-pressed={view === 'resources'} onClick={() => setView('resources')}>
+              Resources
+            </button>
           </div>
         </div>
 
@@ -267,7 +271,7 @@ export default function ExpertMode({
           </div>
         )}
 
-        {view === 'rank' && (
+        {(view === 'rank' || view === 'resources') && (
           <div className="field rank-note">
             <span>Ranking</span>
             <p>{RANK_SITES.length} south-pole candidates · 1 h resolution</p>
@@ -475,6 +479,11 @@ export default function ExpertMode({
             />
           </section>
         </>
+      ) : view === 'resources' ? (
+        <MineralSelectionPanel rows={rankedBase} loading={rankLoading} onSelect={(next) => {
+          onSiteChange(next)
+          setView('single')
+        }} />
       ) : view === 'rank' ? (
         <section className="chart-card ranking-card">
           <div className="chart-head">

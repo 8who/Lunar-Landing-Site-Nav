@@ -59,6 +59,11 @@ what you were looking at.
   that scenario in the single-site view.
 - **Solar panel**: best fixed tilt and heading for the range, plus a W/m²
   comparison of two-axis tracking, that fixed panel and a flat deck.
+- **Resources**: compare south-pole candidates using regional FeO, Ti, or Th
+  abundances cataloged by NASA Moon Trek, with original Lunar Prospector numeric
+  source bins. Set sunlight/Earth minimums and a resource weight; inspect source
+  footprints or nearby regional maxima without implying lander-scale deposits.
+  See [data provenance, reproducible import, and scoring](docs/MINERAL_DATA.md).
 - **Sky view** for any instant pinned on the timeline: drag to look around,
   scroll to zoom, and station labels appear once the field of view is narrow
   enough.

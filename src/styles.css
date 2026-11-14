@@ -3138,3 +3138,48 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Resource comparison uses the atlas tokens; concentration is not a new status color. */
+.mineral-panel { margin-top: 16px; }
+.mineral-panel p { line-height: 1.55; }
+.mineral-caveat { max-width: 90ch; color: var(--muted); margin: 0 0 20px; }
+.mineral-controls { display: grid; grid-template-columns: 1.1fr 1.5fr 1fr 1fr; gap: 16px; align-items: end; }
+.mineral-controls .field, .mineral-thresholds .field { min-width: 0; }
+.mineral-controls select, .mineral-controls input, .mineral-thresholds input { width: 100%; }
+.mineral-controls .field > span, .mineral-thresholds .field > span { color: var(--muted); font-size: 13px; text-transform: none; letter-spacing: 0; }
+.mineral-weight input { min-height: 36px; accent-color: var(--joint); }
+.mineral-thresholds { display: flex; flex-wrap: wrap; gap: 16px; margin: 22px 0 12px; padding: 12px 0 0; border: 0; border-top: 1px solid var(--border); }
+.mineral-thresholds legend { padding-right: 12px; font-size: 13px; color: var(--text); }
+.mineral-thresholds .field { flex: 1 1 170px; max-width: 260px; }
+.mineral-method, .mineral-bin, .mineral-sources { color: var(--muted); font-size: 13px; }
+.mineral-method { max-width: 100ch; }
+.mineral-status { padding: 12px 0; font-size: 14px; }
+.mineral-status strong { color: var(--text); font-weight: 600; }
+.mineral-table-wrap { overflow-x: auto; }
+.mineral-table { min-width: 850px; width: 100%; }
+.mineral-table caption { text-align: left; color: var(--muted); font: 13px 'Source Sans 3', sans-serif; padding: 12px 0; }
+.mineral-table td { vertical-align: top; }
+.mineral-table td:last-child { white-space: normal; min-width: 160px; max-width: 250px; font: 13px 'Source Sans 3', sans-serif; }
+.mineral-table small { display: block; color: var(--muted); margin-top: 4px; font: 11px 'Source Sans 3', sans-serif; }
+.mineral-table .mineral-selected { background: var(--glass-strong); }
+.mineral-site-button { border: 0; background: transparent; color: var(--text); text-align: left; font: 500 13px 'Source Sans 3', sans-serif; padding: 0 6px; white-space: normal; max-width: 200px; }
+.mineral-site-button[aria-pressed='true'] { text-decoration: underline; text-underline-offset: 4px; }
+.mineral-detail { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 20px; padding: 20px 0; border-bottom: 1px solid var(--border); }
+.mineral-detail h3 { margin: 0; font-size: 18px; font-weight: 600; }
+.mineral-detail p { margin: 4px 0; color: var(--muted); font-size: 13px; }
+.mineral-detail > button { align-self: start; }
+.mineral-detail > p, .mineral-measurements { grid-column: 1 / -1; }
+.mineral-measurements { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 12px 0; }
+.mineral-measurements dt { color: var(--muted); font-size: 12px; }
+.mineral-measurements dd { margin: 4px 0 0; font: 500 17px 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+.mineral-sources { margin-top: 16px; max-width: 100ch; }
+.mineral-sources summary { cursor: pointer; color: var(--text); padding: 8px 0; }
+.mineral-sources a { color: var(--earth); text-underline-offset: 3px; }
+.mineral-sources li { margin: 6px 0; }
+@media (max-width: 1050px) { .mineral-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .mineral-controls, .mineral-measurements { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .mineral-detail { grid-template-columns: minmax(0, 1fr); }
+  .mineral-detail > button { justify-self: start; }
+  .mineral-thresholds .field { max-width: none; }
+}

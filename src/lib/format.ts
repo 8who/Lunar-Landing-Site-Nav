@@ -61,6 +61,10 @@ export function formatPercent(value: number, digits = 0): string {
   return `${value.toFixed(digits)}%`
 }
 
+export function formatDecimal(value: number, digits = 2): string {
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: digits }).format(value)
+}
+
 /** Duration in hours with one decimal, for "X h of this day" copy. */
 export function formatHours(ms: number): string {
   return `${(ms / 3_600_000).toFixed(1)} h`
