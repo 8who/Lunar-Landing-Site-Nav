@@ -319,13 +319,13 @@ export default function ExplorerMode({
         <section className="chart-card explorer-sky">
           <div className="chart-head">
             <div>
-              <h2>What you would see</h2>
+              <h2>Lunar Point of View</h2>
               <p>
                 {formatUtc(t, { seconds: true })} · {formatCoord(site.lat, site.lon)}
               </p>
             </div>
           </div>
-          <SkyView site={site} t={t} />
+          <SkyView site={site} t={t} playback={{ playing, onToggle: () => setPlaying((value) => !value) }} />
         </section>
       </aside>
 

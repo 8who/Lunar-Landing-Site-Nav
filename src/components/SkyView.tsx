@@ -19,7 +19,7 @@ import {
 import { panelNormalSky, compassPoint16, tiltArcPoints } from '../lib/astro/panel'
 import { isTerrainCritical } from '../lib/astro/sites'
 import type { LunarSite, SkySample } from '../lib/astro/types'
-import { deg } from '../lib/format'
+import { deg, formatUtc } from '../lib/format'
 import { focusZoomFieldOfView, skyMagnification, SKY_FOV_MIN, SKY_FOV_MAX, SKY_FOV_WIDE } from '../lib/skyCamera'
 
 interface Props {
@@ -30,6 +30,8 @@ interface Props {
   visualMastHeightM?: number
   /** Best fixed panel to mark on the sky, or null to hide it. */
   panel?: { tiltDeg: number; azimuthDeg: number } | null
+  /** Time playback owned by the mode; shown in full screen, where the scrubber is out of view. */
+  playback?: { playing: boolean; onToggle: () => void }
 }
 
 const RAD = Math.PI / 180
@@ -226,7 +228,7 @@ function makeStars(): THREE.Points {
   return new THREE.Points(geometry, material)
 }
 
-export default function SkyView({ site, t, panel, visualMastHeightM = site.mastHeightM ?? 0 }: Props) {
+export default function SkyView({ site, t, panel, playback, visualMastHeightM = site.mastHeightM ?? 0 }: Props) {
   const controlsRef = useRef<(action: 'in' | 'out' | 'reset' | 'sun' | 'earth' | 'terrain') => void>(() => {})
   const [terrainStatus, setTerrainStatus] = useState('Loading NASA terrain…')
   const [seeThrough, setSeeThrough] = useState(false)
@@ -250,6 +252,62 @@ export default function SkyView({ site, t, panel, visualMastHeightM = site.mastH
       .map((st) => ({ ...st, skyPoint: points.get(st.station.id) }))
   }, [observer, site, sky, t])
   const [tracking, setTracking] = useState<'sun' | 'earth' | null>('earth')
+
+  // Full screen: the browser's Fullscreen API where it exists, otherwise a
+  // fixed overlay (iPhone Safari only lets <video> go full screen).
+  const rootRef = useRef<HTMLDivElement>(null)
+  const fullButtonRef = useRef<HTMLButtonElement>(null)
+  const [fullMode, setFullMode] = useState<'off' | 'native' | 'overlay'>('off')
+  const isFull = fullMode !== 'off'
+
+  useEffect(() => {
+    const onChange = () => {
+      const native = document.fullscreenElement !== null && document.fullscreenElement === rootRef.current
+      setFullMode((mode) => (native ? 'native' : mode === 'native' ? 'off' : mode))
+    }
+    document.addEventListener('fullscreenchange', onChange)
+    return () => document.removeEventListener('fullscreenchange', onChange)
+  }, [])
+
+  useEffect(() => {
+    if (fullMode !== 'overlay') return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFullMode('off')
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [fullMode])
+
+  // Keep keyboard focus on the toggle when the view changes size (not on first render).
+  const wasFullRef = useRef(isFull)
+  useEffect(() => {
+    if (wasFullRef.current === isFull) return
+    wasFullRef.current = isFull
+    fullButtonRef.current?.focus({ preventScroll: true })
+  }, [isFull])
+
+  const toggleFullscreen = () => {
+    const root = rootRef.current
+    if (!root) return
+    if (fullMode === 'native') {
+      void document.exitFullscreen()
+      return
+    }
+    if (fullMode === 'overlay') {
+      setFullMode('off')
+      return
+    }
+    if (document.fullscreenEnabled && typeof root.requestFullscreen === 'function') {
+      root.requestFullscreen().catch(() => setFullMode('overlay'))
+    } else {
+      setFullMode('overlay')
+    }
+  }
 
   useLayoutEffect(() => {
     const host = hostRef.current
@@ -793,7 +851,45 @@ export default function SkyView({ site, t, panel, visualMastHeightM = site.mastH
   }, [panel])
 
   return (
-    <>
+    <div
+      ref={rootRef}
+      className={`sky-pov${isFull ? ' is-full' : ''}${fullMode === 'overlay' ? ' is-overlay' : ''}`}
+      role={fullMode === 'overlay' ? 'dialog' : undefined}
+      aria-modal={fullMode === 'overlay' ? true : undefined}
+      aria-label={isFull ? 'Lunar Point of View, full screen' : undefined}
+    >
+      {isFull && (
+        <div className="sky-pov-head">
+          <div>
+            <h2>Lunar Point of View</h2>
+            <p>
+              {site.name} · {formatUtc(t, { seconds: true })}
+            </p>
+          </div>
+          <div className="sky-pov-actions">
+            {playback && (
+              <button
+                className={`scrub-play${playback.playing ? ' is-playing' : ''}`}
+                onClick={playback.onToggle}
+                aria-pressed={playback.playing}
+              >
+                {playback.playing ? (
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <rect x="3.6" y="3" width="3.2" height="10" rx="1.1" />
+                    <rect x="9.2" y="3" width="3.2" height="10" rx="1.1" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M4.9 2.9 12.8 8l-7.9 5.1Z" />
+                  </svg>
+                )}
+                <span>{playback.playing ? 'Pause' : 'Play'}</span>
+              </button>
+            )}
+            <p className="sky-pov-hint">Esc to exit full screen</p>
+          </div>
+        </div>
+      )}
       <div className="sky-view">
         <div className="sky-canvas" ref={hostRef} />
         {sky && (
@@ -825,6 +921,22 @@ export default function SkyView({ site, t, panel, visualMastHeightM = site.mastH
         <button aria-label="Zoom in" disabled={fov <= SKY_FOV_MIN} onClick={() => controlsRef.current('in')}>+</button>
         <button aria-label="Zoom out" disabled={fov >= SKY_FOV_MAX} onClick={() => controlsRef.current('out')}>−</button>
         <button aria-label={`Reset zoom, currently ${skyMagnification(fov).toFixed(1)} times`} title="Restore the wide sky view" onClick={() => controlsRef.current('reset')}>{skyMagnification(fov).toFixed(1)}×</button>
+        <button
+          ref={fullButtonRef}
+          className="sky-full-toggle"
+          aria-pressed={isFull}
+          title={isFull ? 'Exit full screen (Esc)' : 'Show the Lunar Point of View full screen'}
+          onClick={toggleFullscreen}
+        >
+          <svg aria-hidden="true" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            {isFull ? (
+              <path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4" />
+            ) : (
+              <path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" />
+            )}
+          </svg>
+          {isFull ? 'Exit full screen' : 'Full screen'}
+        </button>
       </div>
       {seeThrough && <div className="sky-cutaway" role="status">
         <strong>See-through ground · illustration only</strong>
@@ -854,6 +966,6 @@ export default function SkyView({ site, t, panel, visualMastHeightM = site.mastH
           ))}
         </div>
       )}
-    </>
+    </div>
   )
 }
