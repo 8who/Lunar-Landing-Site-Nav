@@ -197,7 +197,7 @@ export function temperatureAt(
 export function paintTemperature(canvas: HTMLCanvasElement, grid: Float32Array, light: Uint8Array, t: number) {
   const color = ramp(TEMP_STOPS)
   const sun = sunInBodyFrame(t)
-  paint(canvas, (lat, lon) => temperatureAt(grid, light, t, lat, lon, sun), color, 720, 360)
+  paint(canvas, (lat, lon) => temperatureAt(grid, light, t, lat, lon, sun), color)
 }
 
 export { TERRAIN_COLS, TERRAIN_ROWS }

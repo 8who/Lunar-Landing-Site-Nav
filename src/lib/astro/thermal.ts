@@ -107,5 +107,8 @@ export function cellTemperature(
   const cosI = sun.dir.x * normal.x + sun.dir.y * normal.y + sun.dir.z * normal.z
   // At grazing light the equilibrium value falls below the stored heat of the
   // regolith, so the night curve is the floor.
-  return Math.max(night, dayTemperature(cosI, sun.flux))
+  const day = Math.max(night, dayTemperature(cosI, sun.flux))
+  // Blend the modeled temperature across the unresolved thermal transition.
+  const blend = Math.max(0, Math.min(1, (elevation + sun.radiusDeg) / (6 + sun.radiusDeg)))
+  return night + (day - night) * blend * blend * (3 - 2 * blend)
 }
