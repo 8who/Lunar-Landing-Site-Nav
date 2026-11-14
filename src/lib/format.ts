@@ -78,6 +78,12 @@ export function formatMonthDay(t: number): string {
   return `${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`
 }
 
+/** "Nov 2026" in UTC, for month headers. */
+export function formatMonthYear(t: number): string {
+  const d = new Date(t)
+  return `${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+}
+
 /** "Nov 13 2026 · 12:00 UTC". */
 export function formatInstant(t: number): string {
   const d = new Date(t)

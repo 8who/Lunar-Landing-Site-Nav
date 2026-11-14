@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import TimelineChart from '../components/TimelineChart'
 import RankingTable from '../components/RankingTable'
+import OpportunityPanel from '../components/OpportunityPanel'
 import SkyView from '../components/SkyView'
 import MoonGlobe from '../components/MoonGlobe'
 import { buildTimeline } from '../lib/astro/timeline'
@@ -11,6 +12,7 @@ import { createObserver } from '../lib/astro/observer'
 import { SITES, customSite, isTerrainCritical } from '../lib/astro/sites'
 import type { LunarSite, SkySample } from '../lib/astro/types'
 import { formatDuration, formatUtc, deg } from '../lib/format'
+import { utcDay } from '../lib/astro/scrub'
 
 export interface ExpertModeProps {
   site: LunarSite
@@ -48,7 +50,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
   const [pinned, setPinned] = useState<SkySample | null>(null)
   const [customLat, setCustomLat] = useState('-89.50')
   const [customLon, setCustomLon] = useState('0.00')
-  const [view, setView] = useState<'single' | 'rank'>('single')
+  const [view, setView] = useState<'single' | 'rank' | 'find'>('single')
   const [sortBy, setSortBy] = useState<RankSortKey>('jointPct')
 
   const parsedStart = Date.parse(`${day}T00:00:00Z`)
@@ -152,6 +154,9 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
             <button className={view === 'rank' ? 'active' : ''} onClick={() => setView('rank')}>
               Rank sites
             </button>
+            <button className={view === 'find' ? 'active' : ''} onClick={() => setView('find')}>
+              Find windows
+            </button>
           </div>
         </div>
 
@@ -189,7 +194,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
         </label>
 
         <div className="field">
-          <span>Window</span>
+          <span>{view === 'find' ? 'Search horizon' : 'Window'}</span>
           <div className="segmented">
             {[7, 30, 90, 365].map((d) => (
               <button key={d} className={days === d ? 'active' : ''} onClick={() => setDays(d)}>
@@ -235,7 +240,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
         {view === 'rank' && (
           <div className="field rank-note">
             <span>Ranking</span>
-            <p>{SITES.length} curated sites · 1 h resolution</p>
+            <p>{RANK_SITES.length} south-pole candidates · 1 h resolution</p>
           </div>
         )}
       </section>
@@ -429,7 +434,7 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
             />
           </section>
         </>
-      ) : (
+      ) : view === 'rank' ? (
         <section className="chart-card ranking-card">
           <div className="chart-head">
             <div>
@@ -457,6 +462,18 @@ export default function ExpertMode({ site, onSiteChange, day, onDayChange, t }: 
             />
           )}
         </section>
+      ) : (
+        <OpportunityPanel
+          sites={RANK_SITES}
+          t0={t0}
+          days={days}
+          mastHeightM={site.mastHeightM ?? 0}
+          onOpen={(next, start) => {
+            onSiteChange(next)
+            onDayChange(utcDay(start))
+            setView('single')
+          }}
+        />
       )}
 
       <footer className="foot">

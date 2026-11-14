@@ -48,9 +48,14 @@ what you were looking at.
 - **Timeline chart**: Sun and Earth elevation above the local horizon, sunlight
   and link lanes, shaded direct-to-Earth bands, hover readout with azimuth and
   Earth distance, and a click that pins the instant for the sky view.
-- **Ranking**: every curated site scored over the same range at 1 h resolution,
-  sortable by sunlight %, Earth-link %, both %, or longest unbroken link. Click a
-  row to open that site.
+- **Ranking**: the seven south-pole candidates scored over the same range at 1 h
+  resolution, sortable by sunlight %, Earth-link %, both %, or longest unbroken
+  link. Click a row to open that site.
+- **Find windows (inverse search)**: set the mission length and the minimum
+  joint / sunlight / Earth percentages, and a site × start-date calendar scores
+  every candidate at 3 h resolution, rings the cells that clear the bar, and
+  lists the earliest feasible start per site. Click a cell or a result to open
+  that scenario in the single-site view.
 - **Solar panel**: best fixed tilt and heading for the range, plus a W/m²
   comparison of two-axis tracking, that fixed panel and a flat deck.
 - **Sky view** for any instant pinned on the timeline: drag to look around,
