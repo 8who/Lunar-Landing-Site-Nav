@@ -135,7 +135,7 @@ export function buildTimeline(
   const step = samples.length > 1 ? samples[1].t - samples[0].t : stepMs
 
   const sunOn = (t: number) => observer.sunVisible(t)
-  const earthOn = (t: number) => observer.earthElevation(t) > 0
+  const earthOn = (t: number) => observer.earthVisible(t)
   const bothOn = (t: number) => sunOn(t) && earthOn(t)
 
   const sunWindows = findWindows(sunOn, t0, t1, step)
@@ -153,6 +153,7 @@ export function buildTimeline(
   let maxSunElevation = -90
 
   const rad = Math.PI / 180
+  const dip = observer.horizonDipDeg
   for (let i = 1; i < samples.length; i++) {
     const dt = samples[i].t - samples[i - 1].t
     const a = samples[i - 1]
@@ -160,12 +161,12 @@ export function buildTimeline(
     const rSun = (a.sun.angularDiameterDeg + b.sun.angularDiameterDeg) / 4
     // Linear interpolation of the horizon crossing inside each step. The Sun
     // counts as up while its upper limb is above the horizon.
-    sunlitMs += dt * fractionAbove(a.sun.elevation + rSun, b.sun.elevation + rSun)
-    commMs += dt * fractionAbove(a.earth.elevation, b.earth.elevation)
+    sunlitMs += dt * fractionAbove(a.sun.elevation + dip + rSun, b.sun.elevation + dip + rSun)
+    commMs += dt * fractionAbove(a.earth.elevation + dip, b.earth.elevation + dip)
     if (a.sunlit && b.sunlit && a.earthVisible && b.earthVisible) jointMs += dt
 
     const midElev = (a.sun.elevation + b.sun.elevation) / 2
-    const visible = discFractionAbove(midElev, rSun)
+    const visible = discFractionAbove(midElev + dip, rSun)
     const auRatio = KM_PER_AU / ((a.sun.distanceKm + b.sun.distanceKm) / 2)
     const flux = visible * auRatio * auRatio
     if (visible > 0) {
@@ -174,8 +175,9 @@ export function buildTimeline(
     }
     // Flat deck array: sees the Sun at elevation e with incidence sin(e).
     incidenceSum += flux * Math.max(0, Math.sin(midElev * rad)) * dt
-    // Vertical array turned to the Sun's azimuth: incidence cos(e).
-    trackingSum += flux * Math.cos(Math.max(0, midElev) * rad) * dt
+    // Array that tilts and turns to face the Sun: normal incidence. At the
+    // poles this is simply a vertical panel turning in azimuth.
+    trackingSum += flux * dt
     if (b.sun.elevation > maxSunElevation) maxSunElevation = b.sun.elevation
   }
 
@@ -194,6 +196,7 @@ export function buildTimeline(
     meanSolarIncidence: incidenceSum / spanMs,
     meanTrackingIncidence: trackingSum / spanMs,
     meanTrackingFluxWm2: (trackingSum / spanMs) * SOLAR_CONSTANT_WM2,
+    meanFlatFluxWm2: (incidenceSum / spanMs) * SOLAR_CONSTANT_WM2,
     nextSunset: firstCrossing(sunOn, t0, t1, stepMs, false),
     nextSunrise: firstCrossing(sunOn, t0, t1, stepMs, true),
     nextEarthset: firstCrossing(earthOn, t0, t1, stepMs, false),
