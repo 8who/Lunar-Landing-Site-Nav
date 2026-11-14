@@ -8,13 +8,15 @@
 import { elevationAt, isotropicGrid, TERRAIN_COLS, TERRAIN_ROWS } from './astro/terrain'
 import { cellTemperature, sunInBodyFrame } from './astro/thermal'
 import { illuminationAt } from './illuminationData'
+import { polarLatLon, polarSample, POLAR_R, type Pole } from './astro/polar'
+import type { PolarCap } from './polarData'
 
 export type MoonLayer = 'none' | 'light' | 'temperature' | 'altitude'
 
 type Rgb = readonly [number, number, number]
 type Stop = readonly [number, Rgb]
 
-function ramp(stops: Stop[]) {
+export function ramp(stops: Stop[]) {
   return (v: number): Rgb => {
     if (v <= stops[0][0]) return stops[0][1]
     for (let i = 1; i < stops.length; i++) {
@@ -199,3 +201,101 @@ export function paintTemperature(canvas: HTMLCanvasElement, grid: Float32Array, 
 }
 
 export { TERRAIN_COLS, TERRAIN_ROWS }
+
+/** Latitude where the high-resolution polar caps begin. */
+export const CAP_EDGE_LAT = 80
+
+/** Height (km) and surface normal from the polar DEM, for the cap textures. */
+function capHeight(cap: PolarCap, lat: number, lon: number): number {
+  return polarSample(cap.dem, lat, lon)
+}
+
+function capNormal(cap: PolarCap, lat: number, lon: number) {
+  const r = Math.PI / 180
+  const p = lat * r
+  const l = lon * r
+  const up = { x: Math.cos(p) * Math.cos(l), y: Math.cos(p) * Math.sin(l), z: Math.sin(p) }
+  const east = { x: -Math.sin(l), y: Math.cos(l), z: 0 }
+  const north = { x: -Math.sin(p) * Math.cos(l), y: -Math.sin(p) * Math.sin(l), z: Math.cos(p) }
+  const dKm = 1.5
+  const dLat = dKm / POLAR_R / r
+  const dLon = Math.min(170, dLat / Math.max(1e-4, Math.cos(p)))
+  const gE = (capHeight(cap, lat, lon + dLon) - capHeight(cap, lat, lon - dLon)) / (2 * dKm)
+  const latN = Math.min(89.9999, lat + dLat)
+  const latS = Math.max(-89.9999, lat - dLat)
+  const gN = (capHeight(cap, latN, lon) - capHeight(cap, latS, lon)) / ((latN - latS) * r * POLAR_R)
+  const nx = up.x - (gE || 0) * east.x - (gN || 0) * north.x
+  const ny = up.y - (gE || 0) * east.y - (gN || 0) * north.y
+  const nz = up.z - (gE || 0) * east.z - (gN || 0) * north.z
+  const len = Math.hypot(nx, ny, nz)
+  return { up, normal: { x: nx / len, y: ny / len, z: nz / len } }
+}
+
+/** Polar values at a coordinate, or undefined outside the cap. */
+export function capValue(cap: PolarCap, layer: Exclude<MoonLayer, 'none'>, lat: number, lon: number, t?: number) {
+  if (Math.abs(lat) < CAP_EDGE_LAT) return undefined
+  if (layer === 'altitude') {
+    const h = capHeight(cap, lat, lon)
+    return Number.isNaN(h) ? undefined : h
+  }
+  const lit = polarSample(cap.light, lat, lon, 255)
+  if (Number.isNaN(lit)) return undefined
+  if (layer === 'light') return lit
+  const { up, normal } = capNormal(cap, lat, lon)
+  return cellTemperature(sunInBodyFrame(t ?? Date.now()), lat, lon, up, normal, Math.round(lit))
+}
+
+/**
+ * Paint one polar cap texture (polar stereographic, row 0 at +y) for a layer.
+ * `size` px across the cap's bounding square.
+ */
+export function paintCap(
+  canvas: HTMLCanvasElement,
+  pole: Pole,
+  cap: PolarCap,
+  layer: Exclude<MoonLayer, 'none'>,
+  t: number,
+  size = 1024,
+) {
+  const half = (cap.dem.n * cap.dem.px) / 2
+  const stops = layer === 'light' ? LIGHT_STOPS : layer === 'temperature' ? TEMP_STOPS : ALT_STOPS
+  const color = ramp(stops)
+  const sun = sunInBodyFrame(t)
+  canvas.width = size
+  canvas.height = size
+  const ctx = canvas.getContext('2d')!
+  const image = ctx.createImageData(size, size)
+  const pxKm = (2 * half) / size
+  for (let i = 0; i < size; i++) {
+    const y = half - (i + 0.5) * pxKm
+    for (let j = 0; j < size; j++) {
+      const x = (j + 0.5) * pxKm - half
+      const k = (i * size + j) * 4
+      const { lat, lon } = polarLatLon(pole, x, y)
+      if (Math.abs(lat) < CAP_EDGE_LAT - 0.05) {
+        image.data[k + 3] = 0
+        continue
+      }
+      let v: number
+      if (layer === 'altitude') v = capHeight(cap, lat, lon)
+      else {
+        const lit = polarSample(cap.light, lat, lon, 255)
+        if (layer === 'light') v = lit
+        else {
+          const { up, normal } = capNormal(cap, lat, lon)
+          v = Number.isNaN(lit) ? NaN : cellTemperature(sun, lat, lon, up, normal, Math.round(lit))
+        }
+      }
+      if (Number.isNaN(v)) {
+        image.data[k + 3] = 0
+        continue
+      }
+      const [r, g, b] = color(v)
+      image.data[k] = r
+      image.data[k + 1] = g
+      image.data[k + 2] = b
+      image.data[k + 3] = 255
+    }
+  }
+  ctx.putImageData(image, 0, 0)
+}
