@@ -89,18 +89,10 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <div className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path
-                d="M15.9 2.9a9.3 9.3 0 1 0 0 18.2 7.2 7.2 0 0 1 0-18.2Z"
-                fill="currentColor"
-                opacity="0.92"
-              />
-              <circle cx="19.4" cy="6.1" r="1.15" fill="var(--sun)" />
-              <circle cx="17.3" cy="19.1" r="0.8" fill="currentColor" opacity="0.55" />
-            </svg>
+            <img src="/lumbra-logo.svg" alt="" width="38" height="38" />
           </div>
           <div>
-            <h1>Vi@bility42</h1>
+            <h1>Lumbra</h1>
             <p>Lunar mission atlas · Surface light &amp; communications</p>
           </div>
         </div>

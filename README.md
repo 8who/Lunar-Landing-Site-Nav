@@ -1,4 +1,4 @@
-# Lunar Landing Site Navigator — Vi@bility42
+# Lumbra — Lunar Landing Site Navigator
 
 Tool for **rapidly comparing lunar landing sites and dates**: how much Sun a site
 gets, when Earth is above the horizon (direct-to-Earth communication), and how
