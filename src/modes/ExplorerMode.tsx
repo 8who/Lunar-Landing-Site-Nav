@@ -3,8 +3,7 @@ import MoonGlobe from '../components/MoonGlobe'
 import SiteAlternatives from '../components/SiteAlternatives'
 import type { AlternativeSearch } from '../lib/siteAlternatives'
 import SkyView from '../components/SkyView'
-import ArrayCard from '../components/ArrayPower'
-import { bestFixedPanel, compassPoint16 } from '../lib/astro/panel'
+import { compassPoint16 } from '../lib/astro/panel'
 import { buildTimeline } from '../lib/astro/timeline'
 import { createObserver } from '../lib/astro/observer'
 import { SITES, customSite, isTerrainCritical } from '../lib/astro/sites'
@@ -123,9 +122,6 @@ export default function ExplorerMode({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [site, windowStart],
   )
-
-  // Best fixed panel over the 30-day window (shared model with Expert mode).
-  const fixedPanel = useMemo(() => bestFixedPanel(cycle.samples), [cycle])
 
   const [playing, setPlaying] = useState(false)
   const [loop, setLoop] = useState(true)
@@ -320,13 +316,6 @@ export default function ExplorerMode({
           {formatHours(daily.sunlitMs)}
         </p>
 
-        <ArrayCard
-          site={site}
-          t={t}
-          rangeLabel="this 30-day window"
-          rows={arrayRows(cycle.metrics, fixedPanel)}
-        />
-
         <section className="chart-card explorer-sky">
           <div className="chart-head">
             <div>
@@ -431,21 +420,6 @@ export default function ExplorerMode({
       </section>
     </div>
   )
-}
-
-/** Tracking / best fixed / flat average power for the array card. */
-function arrayRows(
-  metrics: { meanTrackingFluxWm2: number; meanFlatFluxWm2: number },
-  fixed: { tiltDeg: number; azimuthDeg: number; capturedPct: number },
-) {
-  return [
-    { label: 'Tilts and turns to face the Sun', value: metrics.meanTrackingFluxWm2 },
-    {
-      label: `Best fixed panel (${fixed.tiltDeg}° tilt, ${fixed.azimuthDeg}°)`,
-      value: (metrics.meanTrackingFluxWm2 * fixed.capturedPct) / 100,
-    },
-    { label: 'Flat on the deck', value: metrics.meanFlatFluxWm2 },
-  ]
 }
 
 /** Mean skyline elevation over all azimuths, deg: how enclosed the site is. */
