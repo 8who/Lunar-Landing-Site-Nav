@@ -1704,3 +1704,89 @@ button {
   line-height: 1.4;
 }
 
+/* Mast height control (top bar) */
+.mast-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.mast-control input[type='range'] {
+  width: 110px;
+  accent-color: var(--sun);
+}
+.mast-control .mono {
+  color: var(--text);
+  min-width: 3.2em;
+}
+
+/* Solar array card (Explorer) and power bars (both modes) */
+.array-caption {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.array-now {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 6px 0 14px;
+}
+.array-now > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--glass);
+}
+.array-now strong {
+  font-size: 1.1rem;
+  color: var(--sun);
+}
+.array-now small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.array-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+.array-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 12.5px;
+}
+.array-bar-track {
+  height: 8px;
+  border-radius: 99px;
+  background: var(--track);
+  overflow: hidden;
+}
+.array-bar-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--sun);
+}
+@media (max-width: 560px) {
+  .array-now {
+    grid-template-columns: 1fr;
+  }
+  .array-bar {
+    grid-template-columns: 1fr auto;
+  }
+  .array-bar-track {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+  .mast-control input[type='range'] {
+    width: 80px;
+  }
+}
