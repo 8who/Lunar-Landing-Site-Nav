@@ -1,15 +1,39 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { elevationAt } from '../lib/astro/terrain'
 import { lunarVector, vectorToLatLon, yawToFaceLon } from '../lib/astro/globeMath'
 import type { LunarSite } from '../lib/astro/types'
 import { markerAtPointer } from './globeMarkers'
+import { illuminationAt, loadIlluminationMap } from '../lib/illuminationData'
+import {
+  LAYER_INFO,
+  legendGradient,
+  paintAltitude,
+  paintLight,
+  paintTemperature,
+  temperatureAt,
+  type MoonLayer,
+} from '../lib/moonLayers'
+import { loadTerrainGrid } from '../lib/terrainData'
+import { loadPolarCap, type PolarCap } from '../lib/polarData'
+import { CAP_EDGE_LAT, capValue, paintCap } from '../lib/moonLayers'
+import { polarXY, type Pole } from '../lib/astro/polar'
 
 interface Props {
   sites: LunarSite[]
   selected: LunarSite | null
   onPick: (lat: number, lon: number) => void
   onSelectSite: (site: LunarSite) => void
+  /** Instant for the temperature layer, UTC epoch ms (defaults to now) */
+  t?: number
 }
+
+const LAYER_BUTTONS: { id: MoonLayer; label: string }[] = [
+  { id: 'none', label: 'Photo' },
+  { id: 'light', label: 'Light / shadow' },
+  { id: 'temperature', label: 'Temperature' },
+  { id: 'altitude', label: 'Altitude' },
+]
 
 const DEG = 180 / Math.PI
 const RAD = Math.PI / 180
@@ -74,8 +98,16 @@ function makeMoonTexture(): THREE.CanvasTexture {
   return texture
 }
 
-export default function MoonGlobe({ sites, selected, onPick, onSelectSite }: Props) {
+export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: Props) {
   const hostRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<(canvas: HTMLCanvasElement | null) => void>(() => {})
+  const tiltRef = useRef<(pitchRad: number) => void>(() => {})
+  const capRef = useRef<(pole: Pole, canvas: HTMLCanvasElement | null) => void>(() => {})
+  const [caps, setCaps] = useState<Partial<Record<Pole, PolarCap>>>({})
+  const [layer, setLayer] = useState<MoonLayer>('none')
+  const [grid, setGrid] = useState<Float32Array | null>(null)
+  const [light, setLight] = useState<Uint8Array | null>(null)
+  const [layerError, setLayerError] = useState(false)
   const markersRef = useRef<(list: LunarSite[], selectedId: string | null) => void>(() => {})
   const focusRef = useRef<(site: LunarSite) => void>(() => {})
   const pickRef = useRef(onPick)
@@ -115,6 +147,94 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite }: Pro
     const globe = new THREE.Group()
     globe.rotation.x = -Math.PI / 2
     globe.add(sphere)
+
+    // Data layer: an unlit, slightly larger sphere with the same UV layout as
+    // moon.jpg, so a canvas painted in lat/lon lands on the right place.
+    const overlayGeometry = new THREE.SphereGeometry(RADIUS * 1.002, 128, 96)
+    const overlayMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.88, depthWrite: false })
+    const overlay = new THREE.Mesh(overlayGeometry, overlayMaterial)
+    overlay.rotation.x = Math.PI / 2
+    overlay.visible = false
+    globe.add(overlay)
+    // High-resolution polar caps (80-90 deg) from LOLA ldem_16: their own
+    // polar-stereographic textures, so the poles are not squeezed into the
+    // top and bottom rows of the global map.
+    const capMeshes = new Map<Pole, THREE.Mesh>()
+    for (const pole of ['south', 'north'] as const) {
+      const rings = 48
+      const segs = 256
+      const positions: number[] = []
+      const uvs: number[] = []
+      const index: number[] = []
+      // Half-width (km) of the cap rasters (811 px at 0.75 km), for the UVs.
+      const half = (811 * 0.75) / 2
+      for (let r = 0; r <= rings; r++) {
+        const colat = (90 - CAP_EDGE_LAT) * (1 - r / rings)
+        const lat = pole === 'south' ? -90 + colat : 90 - colat
+        for (let k = 0; k <= segs; k++) {
+          const lon = -180 + (360 * k) / segs
+          const v = lunarVector(lat, lon, RADIUS * 1.003)
+          positions.push(v.x, v.y, v.z)
+          const xy = polarXY(pole, lat, lon)
+          uvs.push((xy.x + half) / (2 * half), (xy.y + half) / (2 * half))
+        }
+      }
+      for (let r = 0; r < rings; r++) {
+        for (let k = 0; k < segs; k++) {
+          const a = r * (segs + 1) + k
+          const b = a + segs + 1
+          index.push(a, b, a + 1, b, b + 1, a + 1)
+        }
+      }
+      const geometry = new THREE.BufferGeometry()
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+      geometry.setIndex(index)
+      const mat = new THREE.MeshBasicMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        opacity: 0.95,
+      })
+      const mesh = new THREE.Mesh(geometry, mat)
+      mesh.visible = false
+      globe.add(mesh)
+      capMeshes.set(pole, mesh)
+    }
+    capRef.current = (pole, canvas) => {
+      const mesh = capMeshes.get(pole)
+      if (!mesh) return
+      const mat = mesh.material as THREE.MeshBasicMaterial
+      mat.map?.dispose()
+      if (canvas) {
+        const tex = new THREE.CanvasTexture(canvas)
+        tex.colorSpace = THREE.SRGBColorSpace
+        tex.anisotropy = renderer.capabilities.getMaxAnisotropy()
+        mat.map = tex
+        mesh.visible = true
+      } else {
+        mat.map = null
+        mesh.visible = false
+      }
+      mat.needsUpdate = true
+      dirty = true
+    }
+
+    overlayRef.current = (canvas) => {
+      overlayMaterial.map?.dispose()
+      if (!canvas) {
+        overlayMaterial.map = null
+        overlay.visible = false
+      } else {
+        const tex = new THREE.CanvasTexture(canvas)
+        tex.colorSpace = THREE.SRGBColorSpace
+        tex.anisotropy = renderer.capabilities.getMaxAnisotropy()
+        overlayMaterial.map = tex
+        overlay.visible = true
+      }
+      overlayMaterial.needsUpdate = true
+      dirty = true
+    }
 
     const markerCanvas = document.createElement('canvas')
     markerCanvas.width = markerCanvas.height = 64
@@ -255,6 +375,22 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite }: Pro
         material.needsUpdate = true
         if (previous && previous !== loaded) previous.dispose()
         dirty = true
+        // Then the 8K LROC mosaic (8192 x 4096) where the GPU can hold it.
+        if (renderer.capabilities.maxTextureSize >= 8192) {
+          new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}moon-8k.jpg`, (hi) => {
+            if (disposed) {
+              hi.dispose()
+              return
+            }
+            hi.colorSpace = THREE.SRGBColorSpace
+            hi.anisotropy = renderer.capabilities.getMaxAnisotropy()
+            const before = material.map
+            material.map = hi
+            material.needsUpdate = true
+            if (before && before !== hi) before.dispose()
+            dirty = true
+          })
+        }
       },
       undefined,
       () => {
@@ -433,8 +569,22 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite }: Pro
       dirty = true
     }
 
+    // Swing the view to a given pitch (keeps the yaw), e.g. to look down on a pole.
+    tiltRef.current = (target) => {
+      if (dragging) return
+      anim.fromYaw = yaw.current
+      anim.fromPitch = pitch.current
+      anim.toYaw = yaw.current
+      anim.toPitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, target))
+      anim.start = performance.now()
+      anim.duration = 700
+      anim.active = true
+      dirty = true
+    }
+
     return () => {
       disposed = true
+      tiltRef.current = () => {}
       cancelAnimationFrame(raf)
       observer.disconnect()
       host.removeEventListener('pointerdown', onPointerDown)
@@ -445,6 +595,16 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite }: Pro
       host.removeEventListener('wheel', onWheel)
       markersRef.current = () => {}
       focusRef.current = () => {}
+      overlayRef.current = () => {}
+      capRef.current = () => {}
+      for (const mesh of capMeshes.values()) {
+        ;(mesh.material as THREE.MeshBasicMaterial).map?.dispose()
+        ;(mesh.material as THREE.Material).dispose()
+        mesh.geometry.dispose()
+      }
+      overlayMaterial.map?.dispose()
+      overlayMaterial.dispose()
+      overlayGeometry.dispose()
       markers.geometry.dispose()
       markers.material.dispose()
       markerTexture.dispose()
@@ -467,17 +627,155 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite }: Pro
     const all = selected && !sites.some((s) => s.id === selected.id) ? [...sites, selected] : sites
     const list = showAll || !selected ? all : [selected]
     markersRef.current(list, selected?.id ?? null)
-    if (selected) focusRef.current(selected)
   }, [sites, selected, showAll])
 
-  return <div className="moon-globe" ref={hostRef} role="group" aria-label="Interactive Moon landing sites">
-    <div className="globe-site-controls">
-      <button aria-pressed={showAll} onClick={() => { setHover(null); setShowAll((value) => !value) }}>{showAll ? 'Show selected site only' : 'Browse all sites'}</button>
-      {showAll && <label><span>Choose a named site</span><select value={sites.some((site) => site.id === selected?.id) ? selected!.id : ''} onChange={(event) => {
-        const next = sites.find((site) => site.id === event.target.value)
-        if (next) { setShowAll(false); onSelectSite(next) }
-      }}><option value="" disabled>Select a landing site</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>}
+  // Re-focus only when the site itself moves, not when the same site comes back
+  // as a new object (e.g. once its terrain skyline is attached): that would
+  // undo a user's drag or the pole tilt of the light layer.
+  useEffect(() => {
+    if (selected) focusRef.current(selected)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.id, selected?.lat, selected?.lon])
+
+  // Data for the layers loads only once a layer is first asked for.
+  useEffect(() => {
+    if (layer === 'none') return
+    let cancelled = false
+    Promise.all([loadPolarCap('south'), loadPolarCap('north')]).then(([south, north]) => {
+      if (!cancelled) setCaps({ south: south ?? undefined, north: north ?? undefined })
+    })
+    Promise.all([loadTerrainGrid(), layer === 'altitude' ? Promise.resolve(null) : loadIlluminationMap()]).then(
+      ([g, l]) => {
+        if (cancelled) return
+        if (g) setGrid(g)
+        if (l) setLight(l)
+        setLayerError(!g || (layer !== 'altitude' && !l))
+      },
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [layer])
+
+  // Temperature follows the instant, but repainting 260k cells per slider tick
+  // is wasteful: refresh at most every ~2 h of simulated time.
+  const instant = t ?? Date.now()
+  const tempBucket = Math.round(instant / 7_200_000) * 7_200_000
+
+  useEffect(() => {
+    if (layer === 'none') {
+      overlayRef.current(null)
+      return
+    }
+    const canvas = document.createElement('canvas')
+    if (layer === 'altitude' && grid) paintAltitude(canvas, grid)
+    else if (layer === 'light' && light) paintLight(canvas, light)
+    else if (layer === 'temperature' && grid && light) paintTemperature(canvas, grid, light, tempBucket)
+    else {
+      overlayRef.current(null)
+      return
+    }
+    overlayRef.current(canvas)
+  }, [layer, grid, light, layer === 'temperature' ? tempBucket : 0])
+
+  // Polar caps follow the same layer at 4x the resolution.
+  useEffect(() => {
+    for (const pole of ['south', 'north'] as const) {
+      const cap = caps[pole]
+      if (layer === 'none' || !cap) {
+        capRef.current(pole, null)
+        continue
+      }
+      const canvas = document.createElement('canvas')
+      paintCap(canvas, pole, cap, layer, tempBucket)
+      capRef.current(pole, canvas)
+    }
+  }, [layer, caps, layer === 'temperature' ? tempBucket : 0])
+
+  const readout = useMemo(() => {
+    if (!selected || layer === 'none') return null
+    const capPole: Pole = selected.lat < 0 ? 'south' : 'north'
+    const cap = Math.abs(selected.lat) >= CAP_EDGE_LAT ? caps[capPole] : undefined
+    const hi = cap ? capValue(cap, layer, selected.lat, selected.lon, layer === 'temperature' ? tempBucket : instant) : undefined
+    if (hi !== undefined) {
+      if (layer === 'altitude') return `${hi.toFixed(2)} km · 1.9 km data`
+      if (layer === 'light') {
+        const v = Math.round(hi)
+        return `${v === 0 ? '0% · permanent shadow' : `${v}% of the year in sunlight`} · 1.9 km data`
+      }
+      return `${Math.round(hi)} K (${Math.round(hi - 273.15)} °C) · 1.9 km data`
+    }
+    if (layer === 'altitude' && grid) return `${elevationAt(grid, selected.lat, selected.lon).toFixed(2)} km`
+    if (layer === 'light' && light) {
+      const v = illuminationAt(light, selected.lat, selected.lon)
+      return v === 0 ? '0% · permanent shadow' : `${v}% of the year in sunlight`
+    }
+    if (layer === 'temperature' && grid && light) {
+      const k = temperatureAt(grid, light, tempBucket, selected.lat, selected.lon)
+      return `${Math.round(k)} K (${Math.round(k - 273.15)} °C)`
+    }
+    return null
+  }, [layer, grid, light, selected, instant, tempBucket, caps])
+
+  const info = layer === 'none' ? null : LAYER_INFO[layer]
+
+  return (
+    <div className="moon-globe-wrap">
+      <div className="moon-globe" ref={hostRef} role="group" aria-label="Interactive Moon landing sites">
+        <div className="globe-site-controls">
+          <button type="button" aria-pressed={showAll} onClick={() => { setHover(null); setShowAll((value) => !value) }}>{showAll ? 'Show selected site only' : 'Browse all sites'}</button>
+          {showAll && <label><span>Choose a named site</span><select value={sites.some((site) => site.id === selected?.id) ? selected!.id : ''} onChange={(event) => {
+            const next = sites.find((site) => site.id === event.target.value)
+            if (next) { setShowAll(false); onSelectSite(next) }
+          }}><option value="" disabled>Select a landing site</option>{sites.map((site) => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label>}
+        </div>
+        {hover && <div className="globe-site-tooltip" role="tooltip" style={{ left: Math.max(110, Math.min(hover.x, (hostRef.current?.clientWidth ?? 400) - 110)), top: Math.max(80, hover.y - 14) }}><strong>{hover.site.name}</strong><span>Click to select this site</span></div>}
+      </div>
+      <div className="moon-layers" role="group" aria-label="Map layer">
+        {LAYER_BUTTONS.map((b) => (
+          <button
+            key={b.id}
+            type="button"
+            className={layer === b.id ? 'active' : ''}
+            aria-pressed={layer === b.id}
+            onClick={() => {
+              setLayer(b.id)
+              // Bring polar terrain into view without hiding a selected site
+              // elsewhere on the Moon.
+              if (b.id === 'light' && layer !== 'light' && selected && Math.abs(selected.lat) >= CAP_EDGE_LAT) {
+                tiltRef.current((selected.lat < 0 ? -1 : 1) * PITCH_LIMIT)
+              }
+            }}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+      {info && (
+        <div className="moon-legend">
+          <div className="moon-legend-head">
+            <strong>{info.label}</strong>
+            {readout && <span>Selected site: {readout}</span>}
+          </div>
+          {layer === 'temperature' && <span className="moon-legend-time">Map sample: {new Date(tempBucket).toISOString().slice(0, 16).replace('T', ' ')} UTC</span>}
+          <div className="moon-legend-bar" style={{ background: legendGradient(info.stops) }} />
+          <div className="moon-legend-ticks">
+            {info.ticks.map((tick) => (
+              <span
+                key={tick.label}
+                style={{
+                  left: `${((tick.at - info.stops[0][0]) / (info.stops[info.stops.length - 1][0] - info.stops[0][0])) * 100}%`,
+                }}
+              >
+                {tick.label}
+              </span>
+            ))}
+          </div>
+          <p className="moon-legend-source">
+            {layerError ? 'Layer data could not be loaded.' : info.source}
+          </p>
+        </div>
+      )}
     </div>
-    {hover && <div className="globe-site-tooltip" role="tooltip" style={{ left: Math.max(110, Math.min(hover.x, (hostRef.current?.clientWidth ?? 400) - 110)), top: Math.max(80, hover.y - 14) }}><strong>{hover.site.name}</strong><span>Click to select this site</span></div>}
-  </div>
+  )
 }

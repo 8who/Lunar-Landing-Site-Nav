@@ -464,6 +464,7 @@ export default function ExpertMode({
               selected={site}
               onPick={(lat, lon) => onSiteChange(customSite(lat, lon))}
               onSelectSite={onSiteChange}
+              t={skyTime}
             />
             <SiteAlternatives site={site} horizonFor={horizonFor} t0={t0} t1={t1} search={alternativeSearch} onClearSearch={() => onAlternativeSearchChange(null)} onSelect={onSiteChange} />
           </section>

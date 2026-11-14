@@ -248,6 +248,7 @@ export default function ExplorerMode({
           selected={site}
           onPick={(lat, lon) => onSiteChange(customSite(lat, lon))}
           onSelectSite={onSiteChange}
+          t={t}
         />
         <div className="explorer-picked">
           <strong>{formatCoord(site.lat, site.lon)}</strong>
