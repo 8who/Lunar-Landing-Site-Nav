@@ -6,6 +6,7 @@ import MissionAssessmentPanel from '../components/MissionAssessmentPanel'
 import { loadMineralDataset, MINERAL_PRODUCTS, sampleMineral, scoreResources, type MineralDataset, type MineralKey, type ResourcePreferences } from '../lib/resources/minerals'
 import OpportunityPanel from '../components/OpportunityPanel'
 import SkyView from '../components/SkyView'
+import PlaybackSpeed from '../components/PlaybackSpeed'
 import MoonGlobe from '../components/MoonGlobe'
 import SiteAlternatives from '../components/SiteAlternatives'
 import type { AlternativeSearch } from '../lib/siteAlternatives'
@@ -178,6 +179,9 @@ export default function ExpertMode({
 // range (which starts at `day`) is never rebuilt while playing. ----
 const [playing, setPlaying] = useState(false)
 const [loop, setLoop] = useState(true)
+const [playSpeed, setPlaySpeed] = useState(1)
+const speedRef = useRef(playSpeed)
+speedRef.current = playSpeed
 // null = follow the shared instant `t`
 const [simT, setSimT] = useState<number | null>(null)
 
@@ -208,7 +212,7 @@ useEffect(() => {
 useEffect(() => {
   if (!playing || view !== 'single') return
   const timer = setInterval(() => {
-    let next = playheadRef.current + playStepMs
+    let next = playheadRef.current + playStepMs * speedRef.current
     if (next >= t1) {
       if (loop) {
         next = t0
@@ -621,6 +625,7 @@ const skyTime = hover?.t ?? pinned?.t ?? playhead
                     )}
                     <span>{playing ? 'Pause' : 'Play'}</span>
                   </button>
+                  <PlaybackSpeed id="expert-playback-speed" value={playSpeed} onChange={setPlaySpeed} />
                   <label className="scrub-loop">
                     <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
                     Loop

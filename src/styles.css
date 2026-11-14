@@ -1,4 +1,5 @@
-/* ============================================================
+/* =====================================================}
+
    Mission control at night — design tokens
    ============================================================ */
 :root {
@@ -87,7 +88,8 @@ body::before {
   gap: 18px;
 }
 
-/* ============================================================
+/* =====================================================}
+
    Header
    ============================================================ */
 .topbar {
@@ -162,7 +164,8 @@ body::before {
   white-space: nowrap;
 }
 
-/* ============================================================
+/* =====================================================}
+
    Controls, inputs, buttons
    ============================================================ */
 .controls {
@@ -322,7 +325,8 @@ button {
   padding: 0 14px;
 }
 
-/* ============================================================
+/* =====================================================}
+
    KPI cards
    ============================================================ */
 .kpis {
@@ -455,7 +459,8 @@ button {
   opacity: 0.85;
 }
 
-/* ============================================================
+/* =====================================================}
+
    Cards
    ============================================================ */
 .chart-card {
@@ -548,7 +553,8 @@ button {
   padding-bottom: 3px;
 }
 
-/* ============================================================
+/* =====================================================}
+
    Timeline chart
    ============================================================ */
 .chart-wrap {
@@ -701,7 +707,8 @@ button {
   padding: 7px 2px 0;
 }
 
-/* ============================================================
+/* =====================================================}
+
    Footer
    ============================================================ */
 .foot {
@@ -726,7 +733,8 @@ button {
   font-size: 11.5px;
 }
 
-/* ============================================================
+/* =====================================================}
+
    Sky view
    ============================================================ */
 .sky-hint {
@@ -861,7 +869,8 @@ button {
   cursor: not-allowed;
 }
 
-/* ============================================================
+/* =====================================================}
+
    Ranking
    ============================================================ */
 .rank-note p {
@@ -997,7 +1006,8 @@ button {
   color: var(--muted);
 }
 
-/* ============================================================
+/* =====================================================}
+
    Mission calendar (inverse search)
    ============================================================ */
 .opportunity-card {
@@ -1291,7 +1301,8 @@ button {
   }
 }
 
-/* ============================================================
+/* =====================================================}
+
    Moon globe
    ============================================================ */
 .moon-globe {
@@ -1321,7 +1332,8 @@ button {
   font-style: italic;
 }
 
-/* ============================================================
+/* =====================================================}
+
    Explorer
    ============================================================ */
 .explorer {
@@ -1620,7 +1632,8 @@ button {
   line-height: 1;
 }
 
-/* ============================================================
+/* =====================================================}
+
    Lunar-cycle scrubber
    ============================================================ */
 .explorer-scrub {
@@ -1856,7 +1869,8 @@ button {
   cursor: grab;
 }
 
-/* ============================================================
+/* =====================================================}
+
    Responsive
    ============================================================ */
 @media (max-width: 1100px) {
@@ -2004,7 +2018,8 @@ button {
   }
 }
 
-/* ============================================================
+/* =====================================================}
+
    Reduced motion
    ============================================================ */
 @media (prefers-reduced-motion: reduce) {
@@ -3250,7 +3265,8 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
 }
 
 
-/* ============================================================
+/* =====================================================}
+
    Moon globe data layers (light / temperature / altitude)
    ============================================================ */
 .moon-globe-wrap {
@@ -3335,7 +3351,8 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
   .moon-legend { position: relative; left: auto; bottom: auto; width: 100%; margin-top: 8px; }
 }
 
-/* ============================================================
+/* =====================================================}
+
    Fixed mode bar and mast-height explainer
    ============================================================ */
 .topbar {
@@ -3665,6 +3682,128 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
   .sky-canvas { position: relative; inset: auto; order: 2; width: 100%; height: 300px; flex: none; }
   .sky-cutaway { position: static; order: 3; margin: 8px; }
   .sky-caption { position: static; order: 4; padding: 8px 10px; text-shadow: none; }
+}
+
+/* Playback belongs to the shared time control above each Sun/Earth viewer. */
+.scrub-actions { flex-wrap: wrap; }
+.scrub-speed {
+  display: inline-grid;
+  grid-template-columns: 38px 96px 5ch;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-height: 40px;
+  color: var(--muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.scrub-speed input[type='range'] {
+  width: 96px;
+  min-width: 0;
+  accent-color: var(--earth);
+  cursor: pointer;
+}
+.scrub-speed output {
+  width: 5ch;
+  color: var(--text);
+  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+@media (max-width: 600px) {
+  .scrub-actions { gap: 8px 12px; }
+  .scrub-speed input[type='range'] { height: 32px; }
+}
+
+/* Alternatives read as a comparison list beside the atlas, not as cards. */
+.site-alternatives { padding: 24px 0 12px; }
+.alternatives-heading h3 { font-size: 19px; }
+.alternatives-context { max-width: 86ch; margin: 8px 0; }
+.site-alternatives [role='status'] p { margin: 8px 0 14px; }
+.alternatives-columns,
+.site-alternatives li button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, minmax(84px, 105px)) 20px;
+  align-items: center;
+  column-gap: 16px;
+}
+.alternatives-columns {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+}
+.alternatives-columns span:not(:first-child) { text-align: right; }
+.site-alternatives ul { display: block; margin: 0; padding: 0; }
+.site-alternatives li { border-bottom: 1px solid var(--border); }
+.site-alternatives li button {
+  width: 100%;
+  min-height: 64px;
+  height: auto;
+  padding: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+.site-alternatives li button:hover { background: var(--bg-1); }
+.site-alternatives li button:focus-visible { outline: 2px solid var(--earth); outline-offset: -2px; }
+.site-alternatives li .alternative-name { color: var(--text); font-size: 16px; font-weight: 600; }
+.site-alternatives li .alternative-measure {
+  color: var(--text);
+  font: 500 15px 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.alternative-measure-label { display: none; }
+.alternative-arrow { width: 20px; height: 20px; color: var(--muted); }
+.site-alternatives li .alternative-resource { grid-column: 1 / -1; color: var(--muted); font-size: 14px; }
+@media (max-width: 700px) {
+  .alternatives-columns { display: none; }
+  .site-alternatives li button { grid-template-columns: repeat(3, minmax(0, 1fr)) 20px; gap: 10px 8px; }
+  .site-alternatives li .alternative-name { grid-column: 1 / -1; grid-row: 1; padding-right: 28px; }
+  .alternative-arrow { grid-column: 4; grid-row: 1; justify-self: end; }
+  .site-alternatives li .alternative-measure { display: grid; gap: 2px; text-align: left; }
+  .site-alternatives li .alternative-measure-label { display: block; color: var(--muted); font: 400 13px 'Source Sans 3', sans-serif; }
+  .site-alternatives li .alternative-resource { grid-row: 3; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .site-alternatives li button { transition: none; }
+}
+
+/* Hold the mast track still as its numeric value and update message change. */
+.mast-control {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px 96px 5ch;
+  align-items: center;
+  gap: 8px;
+}
+.mast-control input[type='range'] {
+  width: 96px;
+  min-width: 0;
+}
+.mast-control .mono {
+  width: 5ch;
+  min-width: 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.mast-control .mast-update-status {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 0;
+  z-index: 2;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .mast-control { grid-template-columns: 38px 24px minmax(0, 1fr) 5ch; width: 100%; }
+  .mast-control input[type='range'] { width: 100%; min-width: 0; }
 }
 
 /* --------------------------------------------------------------------------

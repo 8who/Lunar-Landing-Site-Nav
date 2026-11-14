@@ -3,6 +3,7 @@ import MoonGlobe from '../components/MoonGlobe'
 import SiteAlternatives from '../components/SiteAlternatives'
 import type { AlternativeSearch } from '../lib/siteAlternatives'
 import SkyView from '../components/SkyView'
+import PlaybackSpeed from '../components/PlaybackSpeed'
 import { compassPoint16 } from '../lib/astro/panel'
 import { buildTimeline } from '../lib/astro/timeline'
 import { createObserver } from '../lib/astro/observer'
@@ -125,6 +126,9 @@ export default function ExplorerMode({
 
   const [playing, setPlaying] = useState(false)
   const [loop, setLoop] = useState(true)
+  const [playSpeed, setPlaySpeed] = useState(1)
+  const speedRef = useRef(playSpeed)
+  speedRef.current = playSpeed
   // The interval must read the latest instant without restarting every tick.
   const tRef = useRef(t)
   useEffect(() => {
@@ -144,7 +148,7 @@ export default function ExplorerMode({
   useEffect(() => {
     if (!playing) return
     const timer = setInterval(() => {
-      let next = tRef.current + PLAY_STEP_MS
+      let next = tRef.current + PLAY_STEP_MS * speedRef.current
       if (next >= windowEnd) {
         if (loop) {
           next = windowStart
@@ -364,6 +368,7 @@ export default function ExplorerMode({
                 )}
                 <span>{playing ? 'Pause' : 'Play'}</span>
               </button>
+              <PlaybackSpeed id="explorer-playback-speed" value={playSpeed} onChange={setPlaySpeed} />
               <label className="scrub-loop">
                 <input type="checkbox" checked={loop} onChange={(e) => setLoop(e.target.checked)} />
                 Loop

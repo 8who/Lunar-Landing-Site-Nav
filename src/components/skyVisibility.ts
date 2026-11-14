@@ -75,6 +75,7 @@ const declarations = `
  * This also removes illustrative foreground peaks from the scientific skyline.
  */
 export function applySkylineMask(material: THREE.Material, mask: ReturnType<typeof createSkylineMask>, ground = false) {
+  const previousProgramKey = material.customProgramCacheKey()
   const fragmentTest = ground
     ? 'if (degrees(asin(clamp(normalize(vSkyRay).y, -1.0, 1.0))) > skylineAtRay()) discard;'
     : 'if (uSkyCutaway < 0.5 && degrees(asin(clamp(normalize(vSkyRay).y, -1.0, 1.0))) <= skylineAtRay()) discard;'
@@ -84,6 +85,12 @@ export function applySkylineMask(material: THREE.Material, mask: ReturnType<type
     shader.fragmentShader = declarations + shader.fragmentShader.replace('void main() {', `void main() {\n ${fragmentTest}`)
   }
   if (material instanceof THREE.ShaderMaterial) augment(material)
-  else material.onBeforeCompile = augment
-  material.customProgramCacheKey = () => `scientific-skyline-${ground ? 'ground' : 'body'}`
+  else {
+    const previous = material.onBeforeCompile
+    material.onBeforeCompile = (shader, renderer) => {
+      previous.call(material, shader, renderer)
+      augment(shader)
+    }
+  }
+  material.customProgramCacheKey = () => `${previousProgramKey}-scientific-skyline-${ground ? 'ground' : 'body'}`
 }
