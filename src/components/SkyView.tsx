@@ -113,10 +113,14 @@ function pct(fraction: number | undefined): string {
 
 function makeLabel(text: string): THREE.Sprite {
   const canvas = document.createElement('canvas')
-  canvas.width = 256
-  canvas.height = 64
+  // Keep the sprite's world size unchanged while giving its baked text enough
+  // pixels to stay crisp on high-DPI screens and when the sky is zoomed in.
+  const textureScale = 3
+  canvas.width = 256 * textureScale
+  canvas.height = 64 * textureScale
   const ctx = canvas.getContext('2d')!
-  ctx.font = '600 30px system-ui, sans-serif'
+  ctx.scale(textureScale, textureScale)
+  ctx.font = '600 34px system-ui, sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.lineWidth = 6

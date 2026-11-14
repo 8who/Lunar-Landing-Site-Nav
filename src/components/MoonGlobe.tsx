@@ -272,12 +272,16 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
     axisGroup.add(axisTube)
     const labels: {texture: THREE.CanvasTexture; sprite: THREE.Sprite; redraw: () => void}[] = []
     const addPole = (text: string, color: string, z: number) => {
-      const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 80
+      // Render labels at 3x backing resolution so the text stays crisp without
+      // changing the sprite's position or physical size on the globe.
+      const textureScale = 3
+      const canvas = document.createElement('canvas'); canvas.width = 256 * textureScale; canvas.height = 80 * textureScale
       const ctx = canvas.getContext('2d')!
+      ctx.scale(textureScale, textureScale)
       const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace
       const redraw = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.font = '500 34px "Source Sans 3", sans-serif'
+        ctx.font = '500 38px "Source Sans 3", sans-serif'
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.lineJoin = 'round'
@@ -296,7 +300,7 @@ export default function MoonGlobe({ sites, selected, onPick, onSelectSite, t }: 
     addPole('South',poleStyle.getPropertyValue('--pole-south').trim(),-axisLength*0.74)
     globe.add(axisGroup)
     // Canvas text does not automatically repaint when the bundled font arrives.
-    document.fonts.load('500 34px "Source Sans 3"').then(() => {
+    document.fonts.load('500 38px "Source Sans 3"').then(() => {
       if (disposed) return
       labels.forEach(label => label.redraw())
       dirty = true

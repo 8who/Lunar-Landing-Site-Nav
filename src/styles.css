@@ -48,7 +48,7 @@ body {
     linear-gradient(180deg, var(--bg-1), var(--bg-0) 42%);
   background-attachment: fixed;
   font-family: 'Source Sans 3', sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -3626,24 +3626,24 @@ button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focu
 .array-caption, .array-now small, .array-bar, .dsn-title,
 .mineral-table small, .moon-legend-time, .site-alternatives li span,
 .mast-control, .mast-control .mono, .mast-update-status,
-.globe-site-tooltip span, .globe-caption { font-size: 13px; letter-spacing: normal; }
+.globe-site-tooltip span, .globe-caption { font-size: 15px; letter-spacing: normal; }
 .chart-head p, .panel-note, .explorer-site-picker p, .verdict p,
 .daily-summary, .terrain-warning, .alternatives-context, .alternatives-count,
-.site-alternatives [role='status'], .foot { font-size: 14px; line-height: 1.4; }
-.ranking-table { font-size: 13px; }
-.ranking-table thead th { font-size: 13px; }
+.site-alternatives [role='status'], .foot { font-size: 16px; line-height: 1.4; }
+.ranking-table { font-size: 15px; }
+.ranking-table thead th { font-size: 15px; }
 .ranking-table th, .ranking-table td { padding: 9px 10px; }
 .verdict-state, .moon-layers button, .globe-site-controls button,
-.globe-site-controls select { font-size: 13px; }
+.globe-site-controls select { font-size: 15px; }
 .kpi-label, .kpi-sub, .panel-note, .chart-head p { overflow-wrap: anywhere; }
 @media (max-width: 600px) {
-  .brand p, .pill, .atlas-kicker, .globe-caption { font-size: 13px; }
+  .brand p, .pill, .atlas-kicker, .globe-caption { font-size: 15px; }
   .pill { max-width: 100%; white-space: normal; text-align: left; }
-  .sky-controls button { font-size: 13px; min-height: 34px; height: auto; }
+  .sky-controls button { font-size: 15px; min-height: 36px; height: auto; }
   .sky-controls { gap: 4px; }
-  .sky-overlay { top: 96px; font-size: 13px; }
-  .sky-caption, .dsn-list { font-size: 13px; line-height: 1.35; }
-  .mast-control { font-size: 13px; }
+  .sky-overlay { top: 96px; font-size: 15px; }
+  .sky-caption, .dsn-list { font-size: 15px; line-height: 1.35; }
+  .mast-control { font-size: 15px; }
   .chart-head { flex-wrap: wrap; }
   .ranking-wrap { overflow-x: auto; }
 }
